@@ -1,0 +1,259 @@
+/* ============================================================
+   Software DS — Color Tokens (CSS Custom Properties)
+   Generated from Beacon design system option tokens
+   ============================================================ */
+
+:root {
+  /* ---- Cool Gray (dark mode only) ---- */
+  --sds-color-cool-gray-025: #F8F8F9;
+  --sds-color-cool-gray-050: #F2F3F4;
+  --sds-color-cool-gray-100: #E2E4E6;
+  --sds-color-cool-gray-150: #DADCDE;
+  --sds-color-cool-gray-200: #CACCCF;
+  --sds-color-cool-gray-250: #B8BCC0;
+  --sds-color-cool-gray-300: #A8AEB2;
+  --sds-color-cool-gray-350: #989FA5;
+  --sds-color-cool-gray-400: #8B9298;
+  --sds-color-cool-gray-450: #7F858B;
+  --sds-color-cool-gray-500: #6F757B;
+  --sds-color-cool-gray-550: #666C72;
+  --sds-color-cool-gray-600: #5B6066;
+  --sds-color-cool-gray-650: #4F5459;
+  --sds-color-cool-gray-700: #40454A;
+  --sds-color-cool-gray-750: #34383D;
+  --sds-color-cool-gray-800: #2B2E33;
+  --sds-color-cool-gray-850: #1F2326;
+  --sds-color-cool-gray-900: #14171A;
+  --sds-color-cool-gray-950: #0E1012;
+  --sds-color-cool-gray-975: #0A0B0D;
+
+  /* ---- Warm Gray (light mode) ---- */
+  --sds-color-warm-gray-025: #FAF8F5;
+  --sds-color-warm-gray-050: #F4F1EB;
+  --sds-color-warm-gray-100: #EBE6DD;
+  --sds-color-warm-gray-150: #E0DCD3;
+  --sds-color-warm-gray-200: #D0CBC3;
+  --sds-color-warm-gray-250: #BFBAB2;
+  --sds-color-warm-gray-300: #B0ABA2;
+  --sds-color-warm-gray-350: #A39E96;
+  --sds-color-warm-gray-400: #948E85;
+  --sds-color-warm-gray-450: #858079;
+  --sds-color-warm-gray-500: #7A756F;
+  --sds-color-warm-gray-550: #6B6760;
+  --sds-color-warm-gray-600: #615D55;
+  --sds-color-warm-gray-650: #54514D;
+  --sds-color-warm-gray-700: #47443F;
+  --sds-color-warm-gray-750: #3B3834;
+  --sds-color-warm-gray-800: #302D28;
+  --sds-color-warm-gray-850: #26231E;
+  --sds-color-warm-gray-900: #1C1A17;
+  --sds-color-warm-gray-950: #14110D;
+  --sds-color-warm-gray-975: #0F0902;
+
+  /* ---- Blue ---- */
+  --sds-color-blue-025: #F2F7F7;
+  --sds-color-blue-050: #EBF4F5;
+  --sds-color-blue-100: #D9EBED;
+  --sds-color-blue-150: #C1DDE3;
+  --sds-color-blue-200: #A6CBD6;
+  --sds-color-blue-250: #8EC0D1;
+  --sds-color-blue-300: #77B2C7;
+  --sds-color-blue-350: #6AA5B8;
+  --sds-color-blue-400: #5E96AB;
+  --sds-color-blue-450: #4F8AA0;
+  --sds-color-blue-500: #427D94;
+  --sds-color-blue-550: #306E88;
+  --sds-color-blue-600: #216280;
+  --sds-color-blue-650: #17597A;
+  --sds-color-blue-700: #0C4A69;
+  --sds-color-blue-750: #013D5B;
+  --sds-color-blue-800: #05314D;
+  --sds-color-blue-850: #032740;
+  --sds-color-blue-900: #031E36;
+  --sds-color-blue-950: #00132B;
+  --sds-color-blue-975: #030515;
+
+  /* ---- Red ---- */
+  --sds-color-red-025: #FFF6F5;
+  --sds-color-red-050: #FFEEEB;
+  --sds-color-red-100: #FFE1DB;
+  --sds-color-red-150: #F7CCC6;
+  --sds-color-red-200: #F2BDB6;
+  --sds-color-red-250: #EEA79E;
+  --sds-color-red-300: #E99185;
+  --sds-color-red-350: #E57D6E;
+  --sds-color-red-400: #DB7060;
+  --sds-color-red-450: #CF6253;
+  --sds-color-red-500: #BF5547;
+  --sds-color-red-550: #AD4739;
+  --sds-color-red-600: #A33F31;
+  --sds-color-red-650: #8F3629;
+  --sds-color-red-700: #7A2E23;
+  --sds-color-red-750: #69261C;
+  --sds-color-red-800: #591E15;
+  --sds-color-red-850: #4A130C;
+  --sds-color-red-900: #330903;
+
+  /* ---- Green ---- */
+  --sds-color-green-025: #F4FAEB;
+  --sds-color-green-050: #EDF5DF;
+  --sds-color-green-100: #E2EDCC;
+  --sds-color-green-150: #D1E0B1;
+  --sds-color-green-200: #BBCF8A;
+  --sds-color-green-250: #AAC267;
+  --sds-color-green-300: #98B43B;
+  --sds-color-green-350: #88A61B;
+  --sds-color-green-400: #7A9A01;
+  --sds-color-green-450: #6D8C0F;
+  --sds-color-green-500: #62800B;
+  --sds-color-green-550: #527315;
+  --sds-color-green-600: #466B11;
+  --sds-color-green-650: #3E5917;
+  --sds-color-green-700: #374A1E;
+  --sds-color-green-750: #2E3D1C;
+  --sds-color-green-800: #273318;
+  --sds-color-green-850: #1D2613;
+  --sds-color-green-900: #161C0F;
+
+  /* ---- Yellow ---- */
+  --sds-color-yellow-025: #FCF9D9;
+  --sds-color-yellow-050: #FCF5B1;
+  --sds-color-yellow-100: #F7EC88;
+  --sds-color-yellow-150: #F0DE54;
+  --sds-color-yellow-200: #EBCE2D;
+  --sds-color-yellow-250: #D6BB31;
+  --sds-color-yellow-300: #C4AA25;
+  --sds-color-yellow-350: #B29B24;
+  --sds-color-yellow-400: #A48E1F;
+  --sds-color-yellow-450: #96811A;
+  --sds-color-yellow-500: #8A7515;
+  --sds-color-yellow-550: #7A6710;
+  --sds-color-yellow-600: #6E5B09;
+  --sds-color-yellow-650: #615109;
+  --sds-color-yellow-700: #544608;
+  --sds-color-yellow-750: #473B05;
+  --sds-color-yellow-800: #3B3002;
+  --sds-color-yellow-850: #2E2601;
+  --sds-color-yellow-900: #211B00;
+
+  /* ---- Purple ---- */
+  --sds-color-purple-300: #C39DE3;
+  --sds-color-purple-550: #805AA1;
+
+  /* ---- Static ---- */
+  --sds-color-white: #FFFFFF;
+  --sds-color-black: #000000;
+
+  /* ---- Brand ---- */
+  --sds-color-brand-midnight:      #00132B;
+  --sds-color-brand-atlantic:      #013D5B;
+  --sds-color-brand-pacific:       #A6CBD6;
+  --sds-color-brand-surf:          #D6E8EA;
+  --sds-color-brand-sky:           #C0EAF2;
+  --sds-color-brand-heritage-red:  #CC2427;
+  --sds-color-brand-prairie:       #ACBAA3;
+  --sds-color-brand-pistachio:     #DAE8D8;
+  --sds-color-brand-fern:          #7A9A01;
+  --sds-color-brand-birch:         #BF5547;
+  --sds-color-brand-parakeet:      #E1E000;
+  --sds-color-brand-lime:          #EBE6DD;
+  --sds-color-brand-oat:           #F7F3EB;
+
+  /* ============================================================
+     Semantic Tokens — Light Mode
+     ============================================================ */
+
+  /* Background */
+  --sds-bg-page:      var(--sds-color-white);
+  --sds-bg-surface:   var(--sds-color-warm-gray-025);
+  --sds-bg-card:      var(--sds-color-white);
+  --sds-bg-elevated:  var(--sds-color-white);
+  --sds-bg-subtle:    var(--sds-color-warm-gray-050);
+
+  /* Text */
+  --sds-text-primary:    var(--sds-color-warm-gray-900);
+  --sds-text-secondary:  var(--sds-color-warm-gray-650);
+  --sds-text-tertiary:   var(--sds-color-warm-gray-550);
+  --sds-text-disabled:   var(--sds-color-warm-gray-300);
+  --sds-text-on-primary: var(--sds-color-white);
+  --sds-text-link:       var(--sds-color-blue-750);
+
+  /* Border */
+  --sds-border-default: var(--sds-color-warm-gray-150);
+  --sds-border-subtle:  var(--sds-color-warm-gray-100);
+  --sds-border-strong:  var(--sds-color-warm-gray-200);
+  --sds-border-focus:   var(--sds-color-blue-750);
+  --sds-focus-ring:     rgba(1, 61, 91, 0.12);
+
+  /* Interactive */
+  --sds-interactive-primary:        var(--sds-color-blue-750);
+  --sds-interactive-primary-hover:  var(--sds-color-blue-800);
+  --sds-interactive-primary-active: var(--sds-color-blue-850);
+  --sds-interactive-primary-subtle: var(--sds-color-blue-100);
+  --sds-interactive-secondary:      var(--sds-color-white);
+  --sds-interactive-secondary-border: var(--sds-color-warm-gray-800);
+
+  /* Navigation */
+  --sds-nav-sidebar-bg:       var(--sds-color-warm-gray-025);
+  --sds-nav-item-active-bg:   var(--sds-color-blue-100);
+  --sds-nav-item-active-text: var(--sds-color-blue-750);
+  --sds-nav-item-text:        var(--sds-color-warm-gray-650);
+  --sds-nav-text-primary:     var(--sds-color-warm-gray-700);
+  --sds-nav-text-secondary:   var(--sds-color-warm-gray-450);
+  --sds-nav-section-header:   var(--sds-color-warm-gray-550);
+
+  /* Status — Success */
+  --sds-status-success-bg:     var(--sds-color-green-025);
+  --sds-status-success-text:   var(--sds-color-green-500);
+  --sds-status-success-strong: var(--sds-color-green-400);
+
+  /* Status — Warning */
+  --sds-status-warning-bg:     var(--sds-color-yellow-025);
+  --sds-status-warning-text:   var(--sds-color-yellow-500);
+  --sds-status-warning-strong: var(--sds-color-yellow-200);
+
+  /* Status — Error */
+  --sds-status-error-bg:     var(--sds-color-red-050);
+  --sds-status-error-text:   var(--sds-color-red-500);
+  --sds-status-error-strong: var(--sds-color-red-450);
+
+  /* Status — Info */
+  --sds-status-info-bg:   var(--sds-color-blue-050);
+  --sds-status-info-text: var(--sds-color-blue-700);
+
+  /* Status — Neutral */
+  --sds-status-neutral-bg:   var(--sds-color-warm-gray-100);
+  --sds-status-neutral-text: var(--sds-color-warm-gray-650);
+
+  /* Status — Purple */
+  --sds-status-purple-bg:   #F7EEFF;
+  --sds-status-purple-text: var(--sds-color-purple-550);
+}
+
+/* ============================================================
+   Dark Mode Overrides
+   Cool grays replace warm grays in dark mode.
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sds-bg-page:      var(--sds-color-cool-gray-950);
+    --sds-bg-surface:   var(--sds-color-cool-gray-900);
+    --sds-bg-card:      var(--sds-color-cool-gray-850);
+    --sds-bg-elevated:  var(--sds-color-cool-gray-800);
+    --sds-bg-subtle:    var(--sds-color-cool-gray-900);
+
+    --sds-text-primary:   var(--sds-color-cool-gray-025);
+    --sds-text-secondary: var(--sds-color-cool-gray-300);
+    --sds-text-tertiary:  var(--sds-color-cool-gray-400);
+    --sds-text-disabled:  var(--sds-color-cool-gray-600);
+
+    --sds-border-default: var(--sds-color-cool-gray-750);
+    --sds-border-subtle:  var(--sds-color-cool-gray-800);
+    --sds-border-strong:  var(--sds-color-cool-gray-650);
+
+    --sds-nav-sidebar-bg:     var(--sds-color-cool-gray-900);
+    --sds-nav-item-active-bg: var(--sds-color-blue-900);
+    --sds-nav-item-text:      var(--sds-color-cool-gray-300);
+    --sds-nav-section-header: var(--sds-color-cool-gray-400);
+  }
+}

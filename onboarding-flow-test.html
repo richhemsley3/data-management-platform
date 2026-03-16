@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User Onboarding — Interactive Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <style>
+    :root {
+      --sds-interactive-primary: #013D5B;
+      --sds-text-primary: #1C1A17;
+      --sds-border-default: #E0DCD3;
+      --sds-bg-surface: #FFFFFF;
+      --sds-bg-page: #F8F7F5;
+      --sds-status-success-bg: #E8F5E9;
+      --sds-status-success-border: #4CAF50;
+      --sds-status-success-text: #2E7D32;
+      --sds-status-info-bg: #E3F2FD;
+      --sds-status-info-border: #2196F3;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--sds-bg-page);
+      color: var(--sds-text-primary);
+      overflow: hidden;
+    }
+
+    #breadcrumb {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      background: var(--sds-bg-surface);
+      border-bottom: 1px solid var(--sds-border-default);
+      font-size: 14px;
+      gap: 8px;
+      z-index: 10;
+      position: relative;
+    }
+
+    #breadcrumb .crumb {
+      cursor: pointer;
+      color: var(--sds-interactive-primary);
+      font-weight: 500;
+    }
+
+    #breadcrumb .crumb:hover { text-decoration: underline; }
+
+    #breadcrumb .separator {
+      color: #999;
+      user-select: none;
+    }
+
+    #breadcrumb .current {
+      color: var(--sds-text-primary);
+      font-weight: 600;
+      cursor: default;
+    }
+
+    #flow-svg {
+      display: block;
+      background: var(--sds-bg-page);
+    }
+
+    .node-group { cursor: pointer; }
+
+    .node-group:hover .node-rect {
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.12));
+    }
+
+    .node-label {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-weight: 600;
+      fill: var(--sds-text-primary);
+      pointer-events: none;
+    }
+
+    .node-desc {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-weight: 400;
+      fill: #666;
+      pointer-events: none;
+    }
+
+    .node-icon {
+      pointer-events: none;
+    }
+
+    .edge-label {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 11px;
+      fill: #666;
+    }
+
+    /* Detail sidebar */
+    #detail-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 100;
+    }
+
+    #detail-sidebar {
+      position: fixed;
+      top: 0;
+      right: -440px;
+      width: 440px;
+      height: 100vh;
+      background: var(--sds-bg-surface);
+      border-left: 1px solid var(--sds-border-default);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.1);
+      z-index: 101;
+      transition: right 0.3s ease;
+      overflow-y: auto;
+      padding: 32px 28px;
+    }
+
+    #detail-sidebar.open { right: 0; }
+
+    #detail-sidebar .close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 20px;
+    }
+
+    #detail-sidebar .close-btn:hover { background: #f0f0f0; }
+
+    #detail-sidebar h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--sds-text-primary);
+      padding-right: 40px;
+    }
+
+    #detail-sidebar .screen-type {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--sds-interactive-primary);
+      margin-bottom: 20px;
+      display: inline-block;
+      background: #EBF4F5;
+      padding: 3px 10px;
+      border-radius: 4px;
+    }
+
+    #detail-sidebar .section {
+      margin-bottom: 20px;
+    }
+
+    #detail-sidebar .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #999;
+      margin-bottom: 6px;
+    }
+
+    #detail-sidebar .section-content {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #444;
+    }
+
+    #detail-sidebar .edge-case {
+      background: #FFF8E1;
+      border-left: 3px solid #FFC107;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      border-radius: 0 6px 6px 0;
+      font-size: 13px;
+      color: #555;
+    }
+
+    #detail-sidebar .exit-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #F5F5F5;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    #detail-sidebar .exit-arrow {
+      color: var(--sds-interactive-primary);
+      font-weight: 700;
+    }
+
+    #title-bar {
+      text-align: center;
+      padding: 12px 0 0;
+      font-size: 12px;
+      color: #999;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      position: absolute;
+      top: 52px;
+      left: 0;
+      right: 0;
+      z-index: 5;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="breadcrumb">
+    <span class="current" id="crumb-root">User Onboarding Flow</span>
+  </div>
+  <div id="title-bar">Interactive Flow Diagram</div>
+  <svg id="flow-svg"></svg>
+
+  <div id="detail-overlay"></div>
+  <div id="detail-sidebar">
+    <button class="close-btn" id="detail-close">&times;</button>
+    <div id="detail-content"></div>
+  </div>
+
+  <script>
+    // ─── Flow Data ───
+    const flowData = {
+      title: "User Onboarding Flow",
+      phases: [
+        {
+          id: "welcome",
+          label: "Welcome",
+          description: "Greet the user and set expectations",
+          icon: "hand-wave",
+          color: "#EBF4F5",
+          borderColor: "#0C4A69",
+          nodes: [
+            {
+              id: "welcome-screen",
+              type: "start",
+              label: "Welcome Screen",
+              screenType: "landing",
+              userAction: "Read welcome message and click 'Get Started'",
+              description: "A warm greeting screen introducing the product. Shows the product name, a brief value proposition, and a prominent 'Get Started' button. May include a short animation or illustration.",
+              edgeCases: [
+                "Returning user: Show 'Welcome back' variant with option to skip onboarding",
+                "Mobile viewport: Stack layout vertically, ensure CTA is above the fold"
+              ],
+              exits: [
+                { to: "profile-setup", label: "Get Started" }
+              ]
+            }
+          ],
+          edges: [
+            { from: "welcome-screen", to: "profile-setup", label: "Get Started", isHappyPath: true }
+          ]
+        },
+        {
+          id: "profile-setup",
+          label: "Profile Setup",
+          description: "Collect user information",
+          icon: "user",
+          color: "#F4FAEB",
+          borderColor: "#4A7A0C",
+          nodes: [
+            {
+              id: "profile-form",
+              type: "screen",
+              label: "Profile Form",
+              screenType: "form",
+              userAction: "Fill in name, role, and avatar",
+              description: "A step-by-step form collecting the user's display name, job role/title, and optional profile photo. Uses progressive disclosure — shows one field group at a time to reduce cognitive load.",
+              edgeCases: [
+                "Validation error: Highlight invalid fields with inline error messages",
+                "Photo upload failure: Show retry option with fallback to default avatar",
+                "SSO auto-fill: Pre-populate fields from identity provider data"
+              ],
+              exits: [
+                { to: "connect-account", label: "Continue" },
+                { to: "welcome-screen", label: "Back" }
+              ]
+            }
+          ],
+          edges: [
+            { from: "profile-form", to: "connect-account", label: "Continue", isHappyPath: true }
+          ]
+        },
+        {
+          id: "connect-account",
+          label: "Connect Account",
+          description: "Link external data sources",
+          icon: "link",
+          color: "#FCF9D9",
+          borderColor: "#8A7A0C",
+          nodes: [
+            {
+              id: "account-select",
+              type: "screen",
+              label: "Account Selection",
+              screenType: "list",
+              userAction: "Choose which external account to connect",
+              description: "Shows available integrations (e.g., cloud storage, databases, SaaS tools) as a grid of cards. Each card shows the service icon, name, and a brief description of what data will be synced.",
+              edgeCases: [
+                "No supported integrations for user's plan: Show upgrade prompt",
+                "OAuth failure: Display error toast with retry option",
+                "User skips: Allow 'Skip for now' with reminder to connect later"
+              ],
+              exits: [
+                { to: "tutorial", label: "Account connected" },
+                { to: "tutorial", label: "Skip for now" }
+              ]
+            }
+          ],
+          edges: [
+            { from: "account-select", to: "tutorial", label: "Connected / Skip", isHappyPath: true }
+          ]
+        },
+        {
+          id: "tutorial",
+          label: "Tutorial",
+          description: "Walk through key features",
+          icon: "book-open",
+          color: "#F7EEFF",
+          borderColor: "#6A1B9A",
+          nodes: [
+            {
+              id: "tutorial-walkthrough",
+              type: "screen",
+              label: "Feature Walkthrough",
+              screenType: "guided-tour",
+              userAction: "Step through interactive tooltips highlighting key features",
+              description: "An interactive guided tour using tooltip overlays that highlight key UI elements one at a time. Each step has a title, description, and 'Next' button. A progress indicator shows how many steps remain.",
+              edgeCases: [
+                "User dismisses early: Save progress, offer to resume later from notification center",
+                "Feature not available on plan: Skip that tooltip, note in settings",
+                "Screen resize mid-tour: Reposition tooltips dynamically"
+              ],
+              exits: [
+                { to: "dashboard", label: "Finish tutorial" },
+                { to: "dashboard", label: "Skip tutorial" }
+              ]
+            }
+          ],
+          edges: [
+            { from: "tutorial-walkthrough", to: "dashboard", label: "Complete / Skip", isHappyPath: true }
+          ]
+        },
+        {
+          id: "dashboard",
+          label: "Dashboard",
+          description: "User lands on the main experience",
+          icon: "layout-dashboard",
+          color: "#E8F5E9",
+          borderColor: "#2E7D32",
+          nodes: [
+            {
+              id: "main-dashboard",
+              type: "end",
+              label: "Main Dashboard",
+              screenType: "dashboard",
+              userAction: "Explore the product, start working",
+              description: "The primary product dashboard showing an overview of the user's workspace. For first-time users, includes contextual empty states with guided actions (e.g., 'Create your first project'). A subtle onboarding checklist widget may appear in the corner showing remaining setup tasks.",
+              edgeCases: [
+                "Empty state: Show starter content and suggested first actions",
+                "Incomplete onboarding: Display checklist widget with skipped steps",
+                "Permission restrictions: Show only sections the user has access to"
+              ],
+              exits: []
+            }
+          ],
+          edges: []
+        }
+      ],
+      crossPhaseEdges: [
+        { from: "welcome/welcome-screen", to: "profile-setup/profile-form", label: "Get Started", style: "solid" },
+        { from: "profile-setup/profile-form", to: "connect-account/account-select", label: "Continue", style: "solid" },
+        { from: "connect-account/account-select", to: "tutorial/tutorial-walkthrough", label: "Next", style: "solid" },
+        { from: "tutorial/tutorial-walkthrough", to: "dashboard/main-dashboard", label: "Finish", style: "solid" }
+      ]
+    };
+
+    // ─── SVG + Zoom Setup ───
+    const width = window.innerWidth;
+    const height = window.innerHeight - 100;
+
+    const svg = d3.select('#flow-svg')
+      .attr('width', width)
+      .attr('height', height);
+
+    const defs = svg.append('defs');
+
+    // Arrowhead marker
+    defs.append('marker')
+      .attr('id', 'arrowhead')
+      .attr('viewBox', '0 0 10 7')
+      .attr('refX', 10)
+      .attr('refY', 3.5)
+      .attr('markerWidth', 10)
+      .attr('markerHeight', 7)
+      .attr('orient', 'auto')
+      .append('polygon')
+      .attr('points', '0 0, 10 3.5, 0 7')
+      .attr('fill', '#013D5B');
+
+    defs.append('marker')
+      .attr('id', 'arrowhead-light')
+      .attr('viewBox', '0 0 10 7')
+      .attr('refX', 10)
+      .attr('refY', 3.5)
+      .attr('markerWidth', 10)
+      .attr('markerHeight', 7)
+      .attr('orient', 'auto')
+      .append('polygon')
+      .attr('points', '0 0, 10 3.5, 0 7')
+      .attr('fill', '#aaa');
+
+    const container = svg.append('g').attr('class', 'container');
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 4])
+      .on('zoom', (event) => {
+        container.attr('transform', event.transform);
+      });
+
+    svg.call(zoom);
+
+    // ─── Fit to Content ───
+    function fitToContent() {
+      const bounds = container.node().getBBox();
+      if (bounds.width === 0) return;
+      const padding = 80;
+      const fullWidth = bounds.width + padding * 2;
+      const fullHeight = bounds.height + padding * 2;
+      const scale = Math.min(width / fullWidth, height / fullHeight, 1);
+      const tx = (width - bounds.width * scale) / 2 - bounds.x * scale;
+      const ty = (height - bounds.height * scale) / 2 - bounds.y * scale;
+      svg.transition().duration(500)
+        .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    }
+
+    // ─── Icon SVG Paths ───
+    function getIcon(name, x, y, size = 20) {
+      const icons = {
+        'hand-wave': `<g transform="translate(${x},${y})"><circle cx="${size/2}" cy="${size/2}" r="${size/2 - 1}" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M${size*0.3} ${size*0.65} Q${size*0.5} ${size*0.25} ${size*0.7} ${size*0.35}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M${size*0.35} ${size*0.5} L${size*0.5} ${size*0.3}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M${size*0.5} ${size*0.55} L${size*0.65} ${size*0.4}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g>`,
+        'user': `<g transform="translate(${x},${y})"><circle cx="${size/2}" cy="${size*0.35}" r="${size*0.2}" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M${size*0.15} ${size*0.85} Q${size*0.15} ${size*0.55} ${size/2} ${size*0.55} Q${size*0.85} ${size*0.55} ${size*0.85} ${size*0.85}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g>`,
+        'link': `<g transform="translate(${x},${y})"><path d="M${size*0.45} ${size*0.55} L${size*0.55} ${size*0.45}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M${size*0.3} ${size*0.5} Q${size*0.2} ${size*0.3} ${size*0.4} ${size*0.25} L${size*0.5} ${size*0.2}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M${size*0.7} ${size*0.5} Q${size*0.8} ${size*0.7} ${size*0.6} ${size*0.75} L${size*0.5} ${size*0.8}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g>`,
+        'book-open': `<g transform="translate(${x},${y})"><path d="M${size/2} ${size*0.25} L${size/2} ${size*0.8}" stroke="currentColor" stroke-width="1.5"/><path d="M${size/2} ${size*0.25} Q${size*0.3} ${size*0.2} ${size*0.15} ${size*0.3} L${size*0.15} ${size*0.75} Q${size*0.3} ${size*0.7} ${size/2} ${size*0.8}" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M${size/2} ${size*0.25} Q${size*0.7} ${size*0.2} ${size*0.85} ${size*0.3} L${size*0.85} ${size*0.75} Q${size*0.7} ${size*0.7} ${size/2} ${size*0.8}" fill="none" stroke="currentColor" stroke-width="1.5"/></g>`,
+        'layout-dashboard': `<g transform="translate(${x},${y})"><rect x="${size*0.15}" y="${size*0.15}" width="${size*0.3}" height="${size*0.7}" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="${size*0.55}" y="${size*0.15}" width="${size*0.3}" height="${size*0.3}" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="${size*0.55}" y="${size*0.55}" width="${size*0.3}" height="${size*0.3}" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/></g>`,
+        'check': `<g transform="translate(${x},${y})"><polyline points="${size*0.2},${size*0.5} ${size*0.4},${size*0.7} ${size*0.8},${size*0.3}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>`
+      };
+      return icons[name] || icons['user'];
+    }
+
+    // ─── State ───
+    let currentLevel = 1;
+    let currentPhase = null;
+
+    // ─── Breadcrumb ───
+    function updateBreadcrumb(level, phaseName, nodeName) {
+      const bc = document.getElementById('breadcrumb');
+      if (level === 1) {
+        bc.innerHTML = '<span class="current">User Onboarding Flow</span>';
+      } else if (level === 2) {
+        bc.innerHTML = `
+          <span class="crumb" onclick="renderLevel1()">User Onboarding Flow</span>
+          <span class="separator">›</span>
+          <span class="current">${phaseName}</span>
+        `;
+      }
+    }
+
+    // ─── Render Level 1 — Overview ───
+    function renderLevel1() {
+      currentLevel = 1;
+      currentPhase = null;
+      updateBreadcrumb(1);
+      container.selectAll('*').remove();
+
+      const phaseSpacing = 280;
+      const startX = 100;
+      const centerY = Math.max(height / 2, 100);
+      const nodeW = 200;
+      const nodeH = 100;
+
+      flowData.phases.forEach((phase, i) => {
+        phase.x = startX + i * phaseSpacing;
+        phase.y = centerY;
+      });
+
+      // Draw edges first (behind nodes)
+      for (let i = 0; i < flowData.phases.length - 1; i++) {
+        const from = flowData.phases[i];
+        const to = flowData.phases[i + 1];
+        const x1 = from.x + nodeW;
+        const y1 = from.y + nodeH / 2;
+        const x2 = to.x;
+        const y2 = to.y + nodeH / 2;
+
+        container.append('line')
+          .attr('x1', x1)
+          .attr('y1', y1)
+          .attr('x2', x2)
+          .attr('y2', y2)
+          .attr('stroke', '#013D5B')
+          .attr('stroke-width', 3)
+          .attr('marker-end', 'url(#arrowhead)')
+          .attr('opacity', 0)
+          .transition().duration(400).delay(100 + i * 80)
+          .attr('opacity', 1);
+      }
+
+      // Draw phase nodes
+      flowData.phases.forEach((phase, i) => {
+        const g = container.append('g')
+          .attr('class', 'node-group')
+          .attr('transform', `translate(${phase.x}, ${phase.y})`)
+          .style('cursor', 'pointer')
+          .attr('opacity', 0)
+          .on('click', () => renderLevel2(phase));
+
+        g.transition().duration(400).delay(i * 80).attr('opacity', 1);
+
+        // Determine shape
+        const isStart = phase.id === 'welcome';
+        const isEnd = phase.id === 'dashboard';
+
+        if (isStart || isEnd) {
+          // Stadium / pill shape
+          g.append('rect')
+            .attr('class', 'node-rect')
+            .attr('width', nodeW)
+            .attr('height', nodeH)
+            .attr('rx', nodeH / 2)
+            .attr('fill', isEnd ? '#E8F5E9' : phase.color)
+            .attr('stroke', isEnd ? '#4CAF50' : phase.borderColor)
+            .attr('stroke-width', 2)
+            .style('transition', 'filter 0.2s ease');
+        } else {
+          g.append('rect')
+            .attr('class', 'node-rect')
+            .attr('width', nodeW)
+            .attr('height', nodeH)
+            .attr('rx', 12)
+            .attr('fill', phase.color)
+            .attr('stroke', phase.borderColor)
+            .attr('stroke-width', 2)
+            .style('transition', 'filter 0.2s ease');
+        }
+
+        // Icon
+        const iconG = g.append('g')
+          .attr('class', 'node-icon')
+          .attr('color', phase.borderColor);
+        iconG.html(getIcon(phase.icon, 16, 18, 24));
+
+        // Step number badge
+        g.append('circle')
+          .attr('cx', nodeW - 20)
+          .attr('cy', 20)
+          .attr('r', 12)
+          .attr('fill', phase.borderColor)
+          .attr('opacity', 0.15);
+
+        g.append('text')
+          .attr('x', nodeW - 20)
+          .attr('y', 25)
+          .attr('text-anchor', 'middle')
+          .attr('font-size', '12px')
+          .attr('font-weight', '700')
+          .attr('fill', phase.borderColor)
+          .text(i + 1);
+
+        // Label
+        g.append('text')
+          .attr('class', 'node-label')
+          .attr('x', 48)
+          .attr('y', 36)
+          .attr('font-size', '15px')
+          .text(phase.label);
+
+        // Description
+        g.append('text')
+          .attr('class', 'node-desc')
+          .attr('x', 16)
+          .attr('y', 62)
+          .attr('font-size', '12px')
+          .text(phase.description);
+
+        // "Click to explore" hint
+        g.append('text')
+          .attr('x', 16)
+          .attr('y', nodeH - 12)
+          .attr('font-size', '10px')
+          .attr('fill', phase.borderColor)
+          .attr('opacity', 0.6)
+          .text('Click to explore →');
+
+        // Hover effects
+        g.on('mouseenter', function() {
+          d3.select(this).select('.node-rect')
+            .transition().duration(150)
+            .attr('filter', 'drop-shadow(0 4px 12px rgba(0,0,0,0.12))')
+            .attr('stroke-width', 2.5);
+        })
+        .on('mouseleave', function() {
+          d3.select(this).select('.node-rect')
+            .transition().duration(150)
+            .attr('filter', 'none')
+            .attr('stroke-width', 2);
+        });
+      });
+
+      setTimeout(() => fitToContent(), 50);
+    }
+
+    // ─── Render Level 2 — Phase Detail ───
+    function renderLevel2(phase) {
+      currentLevel = 2;
+      currentPhase = phase;
+      updateBreadcrumb(2, phase.label);
+      container.selectAll('*').remove();
+
+      const nodes = phase.nodes;
+      const nodeW = 240;
+      const nodeH = 80;
+      const startX = 80;
+      const centerY = Math.max(height / 2 - nodeH / 2, 60);
+      const spacing = 300;
+
+      // Position nodes
+      nodes.forEach((node, i) => {
+        node.x = startX + i * spacing;
+        node.y = centerY;
+      });
+
+      // Draw edges within phase
+      phase.edges.forEach((edge, i) => {
+        const fromNode = nodes.find(n => n.id === edge.from);
+        const toNode = nodes.find(n => n.id === edge.to);
+        if (!fromNode || !toNode) return;
+
+        const x1 = fromNode.x + nodeW;
+        const y1 = fromNode.y + nodeH / 2;
+        const x2 = toNode.x;
+        const y2 = toNode.y + nodeH / 2;
+
+        container.append('line')
+          .attr('x1', x1).attr('y1', y1)
+          .attr('x2', x2).attr('y2', y2)
+          .attr('stroke', edge.isHappyPath ? '#013D5B' : '#ccc')
+          .attr('stroke-width', edge.isHappyPath ? 3 : 1.5)
+          .attr('marker-end', edge.isHappyPath ? 'url(#arrowhead)' : 'url(#arrowhead-light)')
+          .attr('opacity', 0)
+          .transition().duration(400).delay(200)
+          .attr('opacity', 1);
+
+        if (edge.label) {
+          const mx = (x1 + x2) / 2;
+          const my = (y1 + y2) / 2 - 10;
+          container.append('text')
+            .attr('class', 'edge-label')
+            .attr('x', mx)
+            .attr('y', my)
+            .attr('text-anchor', 'middle')
+            .text(edge.label)
+            .attr('opacity', 0)
+            .transition().duration(400).delay(300)
+            .attr('opacity', 1);
+        }
+      });
+
+      // Draw nodes
+      nodes.forEach((node, i) => {
+        const g = container.append('g')
+          .attr('class', 'node-group')
+          .attr('transform', `translate(${node.x}, ${node.y})`)
+          .attr('opacity', 0)
+          .on('click', () => showDetail(node, phase));
+
+        g.transition().duration(400).delay(i * 100).attr('opacity', 1);
+
+        // Node shape based on type
+        if (node.type === 'start') {
+          g.append('rect')
+            .attr('class', 'node-rect')
+            .attr('width', nodeW)
+            .attr('height', nodeH)
+            .attr('rx', nodeH / 2)
+            .attr('fill', '#E8F5E9')
+            .attr('stroke', '#4CAF50')
+            .attr('stroke-width', 2);
+        } else if (node.type === 'end') {
+          g.append('rect')
+            .attr('class', 'node-rect')
+            .attr('width', nodeW)
+            .attr('height', nodeH)
+            .attr('rx', nodeH / 2)
+            .attr('fill', '#E8F5E9')
+            .attr('stroke', '#4CAF50')
+            .attr('stroke-width', 2);
+
+          // Checkmark icon for end
+          const checkG = g.append('g').attr('color', '#4CAF50');
+          checkG.html(getIcon('check', nodeW - 36, 8, 20));
+        } else if (node.type === 'decision') {
+          // Diamond shape
+          const cx = nodeW / 2;
+          const cy = nodeH / 2;
+          const dx = nodeW / 2 - 10;
+          const dy = nodeH / 2 - 5;
+          g.append('polygon')
+            .attr('class', 'node-rect')
+            .attr('points', `${cx},${cy-dy} ${cx+dx},${cy} ${cx},${cy+dy} ${cx-dx},${cy}`)
+            .attr('fill', '#FFF8E1')
+            .attr('stroke', phase.borderColor)
+            .attr('stroke-width', 2);
+        } else {
+          g.append('rect')
+            .attr('class', 'node-rect')
+            .attr('width', nodeW)
+            .attr('height', nodeH)
+            .attr('rx', 10)
+            .attr('fill', '#FFFFFF')
+            .attr('stroke', phase.borderColor)
+            .attr('stroke-width', 1.5);
+        }
+
+        // Phase color accent bar on left
+        if (node.type !== 'decision') {
+          g.append('rect')
+            .attr('x', 0)
+            .attr('y', node.type === 'start' || node.type === 'end' ? 10 : 0)
+            .attr('width', 4)
+            .attr('height', node.type === 'start' || node.type === 'end' ? nodeH - 20 : nodeH)
+            .attr('rx', 2)
+            .attr('fill', phase.borderColor)
+            .attr('opacity', 0.6);
+        }
+
+        // Screen type badge
+        g.append('text')
+          .attr('x', 16)
+          .attr('y', 22)
+          .attr('font-size', '10px')
+          .attr('font-weight', '600')
+          .attr('fill', phase.borderColor)
+          .attr('text-transform', 'uppercase')
+          .text(node.screenType ? node.screenType.toUpperCase() : node.type.toUpperCase());
+
+        // Label
+        g.append('text')
+          .attr('class', 'node-label')
+          .attr('x', 16)
+          .attr('y', 44)
+          .attr('font-size', '14px')
+          .text(node.label);
+
+        // User action preview
+        const actionText = node.userAction.length > 35 ? node.userAction.substring(0, 35) + '...' : node.userAction;
+        g.append('text')
+          .attr('class', 'node-desc')
+          .attr('x', 16)
+          .attr('y', 62)
+          .attr('font-size', '11px')
+          .text(actionText);
+
+        // Hover
+        g.on('mouseenter', function() {
+          d3.select(this).select('.node-rect')
+            .transition().duration(150)
+            .attr('filter', 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))')
+            .attr('stroke-width', 2.5);
+        })
+        .on('mouseleave', function() {
+          d3.select(this).select('.node-rect')
+            .transition().duration(150)
+            .attr('filter', 'none')
+            .attr('stroke-width', node.type === 'screen' ? 1.5 : 2);
+        });
+      });
+
+      // Phase context: show previous/next phase hints
+      const phaseIdx = flowData.phases.indexOf(phase);
+      if (phaseIdx > 0) {
+        const prev = flowData.phases[phaseIdx - 1];
+        const hintG = container.append('g')
+          .attr('transform', `translate(${startX - 80}, ${centerY + nodeH / 2 - 8})`)
+          .style('cursor', 'pointer')
+          .attr('opacity', 0.5)
+          .on('click', () => renderLevel2(prev));
+
+        hintG.append('text')
+          .attr('font-size', '11px')
+          .attr('fill', '#999')
+          .attr('text-anchor', 'end')
+          .text(`← ${prev.label}`);
+      }
+
+      if (phaseIdx < flowData.phases.length - 1) {
+        const next = flowData.phases[phaseIdx + 1];
+        const lastNode = nodes[nodes.length - 1];
+        const hintG = container.append('g')
+          .attr('transform', `translate(${lastNode.x + nodeW + 40}, ${centerY + nodeH / 2 - 8})`)
+          .style('cursor', 'pointer')
+          .attr('opacity', 0.5)
+          .on('click', () => renderLevel2(next));
+
+        hintG.append('text')
+          .attr('font-size', '11px')
+          .attr('fill', '#999')
+          .text(`${next.label} →`);
+      }
+
+      setTimeout(() => fitToContent(), 50);
+    }
+
+    // ─── Level 3 — Detail Sidebar ───
+    function showDetail(node, phase) {
+      const sidebar = document.getElementById('detail-sidebar');
+      const overlay = document.getElementById('detail-overlay');
+      const content = document.getElementById('detail-content');
+
+      let edgeCasesHTML = '';
+      if (node.edgeCases && node.edgeCases.length > 0) {
+        edgeCasesHTML = node.edgeCases.map(ec => `<div class="edge-case">${ec}</div>`).join('');
+      }
+
+      let exitsHTML = '';
+      if (node.exits && node.exits.length > 0) {
+        exitsHTML = node.exits.map(exit => `
+          <div class="exit-item">
+            <span class="exit-arrow">→</span>
+            <span>${exit.label}</span>
+          </div>
+        `).join('');
+      }
+
+      content.innerHTML = `
+        <h2>${node.label}</h2>
+        <span class="screen-type">${node.screenType || node.type}</span>
+
+        <div class="section">
+          <div class="section-title">User Action</div>
+          <div class="section-content">${node.userAction}</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Description</div>
+          <div class="section-content">${node.description}</div>
+        </div>
+
+        ${edgeCasesHTML ? `
+        <div class="section">
+          <div class="section-title">Edge Cases</div>
+          ${edgeCasesHTML}
+        </div>
+        ` : ''}
+
+        ${exitsHTML ? `
+        <div class="section">
+          <div class="section-title">Exits</div>
+          ${exitsHTML}
+        </div>
+        ` : ''}
+      `;
+
+      overlay.style.display = 'block';
+      sidebar.classList.add('open');
+    }
+
+    function closeDetail() {
+      document.getElementById('detail-sidebar').classList.remove('open');
+      setTimeout(() => {
+        document.getElementById('detail-overlay').style.display = 'none';
+      }, 300);
+    }
+
+    document.getElementById('detail-close').addEventListener('click', closeDetail);
+    document.getElementById('detail-overlay').addEventListener('click', closeDetail);
+
+    // ─── Initial Render ───
+    renderLevel1();
+  </script>
+</body>
+</html>

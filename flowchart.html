@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Security Product — UX Flows</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<link rel="stylesheet" href="/Users/richhemsley/Desktop/software-ds/tokens/colors.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: var(--sds-bg-page);
+    color: var(--sds-text-primary);
+    padding: 48px 40px;
+    line-height: 1.5;
+  }
+
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 16px;
+    color: var(--sds-text-tertiary);
+    margin-bottom: 48px;
+  }
+
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 48px 0 8px;
+    color: var(--sds-text-primary);
+  }
+
+  .desc {
+    font-size: 13px;
+    color: var(--sds-text-tertiary);
+    margin-bottom: 20px;
+  }
+
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--sds-border-default);
+    margin: 48px 0 32px;
+  }
+
+  /* Flow containers */
+  .flow-card {
+    border: 1px solid var(--sds-border-default);
+    border-radius: 12px;
+    background: var(--sds-bg-card);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+
+  .flow-card-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--sds-border-subtle);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .flow-number {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--sds-interactive-primary);
+    color: var(--sds-text-on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .flow-title {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .flow-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: auto;
+  }
+
+  .tag-setup { background: var(--sds-status-info-bg); color: var(--sds-status-info-text); }
+  .tag-core { background: var(--sds-status-success-bg); color: var(--sds-status-success-text); }
+  .tag-action { background: var(--sds-status-warning-bg); color: var(--sds-status-warning-text); }
+  .tag-monitor { background: #F7EEFF; color: var(--sds-status-purple-text); }
+
+  .flow-card-body {
+    padding: 24px;
+    overflow-x: auto;
+  }
+
+  .flow-card-body .mermaid {
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Overview diagram */
+  .overview-card {
+    border: 2px solid var(--sds-interactive-primary);
+    border-radius: 12px;
+    background: var(--sds-bg-card);
+    box-shadow: 0 2px 8px rgba(1, 61, 91, 0.08);
+    overflow: hidden;
+    margin-bottom: 48px;
+  }
+
+  .overview-card .flow-card-header {
+    background: var(--sds-interactive-primary);
+    border-bottom: none;
+  }
+
+  .overview-card .flow-title {
+    color: var(--sds-text-on-primary);
+  }
+
+  .overview-card .flow-card-body {
+    padding: 32px 24px;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--sds-text-secondary);
+  }
+
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Data Security Product</h1>
+<p class="subtitle">UX Flow Architecture</p>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background: var(--sds-status-info-bg); border: 1px solid var(--sds-status-info-text);"></div> Setup</div>
+  <div class="legend-item"><div class="legend-dot" style="background: var(--sds-status-success-bg); border: 1px solid var(--sds-status-success-text);"></div> Core Workflow</div>
+  <div class="legend-item"><div class="legend-dot" style="background: var(--sds-status-warning-bg); border: 1px solid var(--sds-status-warning-text);"></div> Action</div>
+  <div class="legend-item"><div class="legend-dot" style="background: #F7EEFF; border: 1px solid var(--sds-status-purple-text);"></div> Monitoring</div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="overview-card">
+  <div class="flow-card-header">
+    <div class="flow-title">Product Flow Overview</div>
+  </div>
+  <div class="flow-card-body">
+    <pre class="mermaid">
+flowchart LR
+    A["1. Connect\nData Sources"] --> B["2. Scan &\nClassify Data"]
+    B --> C["3. Assess\nRisk"]
+    C --> D["4. Remediate\nRisks"]
+    C --> E["5. Define\nPolicies"]
+    E --> D
+    D --> F["6. Monitor\n& Report"]
+    F -->|"Risk changes"| C
+
+    style A fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    style B fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    style C fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    style D fill:#FCF9D9,stroke:#8A7515,color:#544608
+    style E fill:#FCF9D9,stroke:#8A7515,color:#544608
+    style F fill:#F7EEFF,stroke:#805AA1,color:#805AA1
+    </pre>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- FLOW 1: Connections -->
+<div class="flow-card">
+  <div class="flow-card-header">
+    <div class="flow-number">1</div>
+    <div class="flow-title">Data Source Connections</div>
+    <span class="flow-tag tag-setup">Setup</span>
+  </div>
+  <div class="flow-card-body">
+    <pre class="mermaid">
+flowchart TD
+    A(["Connections Page"]):::start --> B{"Any connections\nexist?"}
+    B -->|No| C["Empty State:\nConnect your first\ndata source"]:::empty
+    B -->|Yes| D["Connection\nList View"]:::page
+
+    C --> E["+ Add Connection"]:::action
+    D --> E
+    D -->|"Click row"| N["Connection\nDetail"]:::page
+
+    E --> F["Select Platform\n(Snowflake, AWS,\nDatabricks...)"]:::step
+    F --> G["Configure\nCredentials"]:::step
+    G --> H["Test\nConnection"]:::step
+
+    H --> I{"Test\nsuccessful?"}
+    I -->|Yes| J["Select Schemas\n& Databases"]:::step
+    I -->|No| K["Error:\nShow failure\nreason"]:::error
+    K --> G
+
+    J --> L["Review\n& Save"]:::step
+    L --> M["Connection Created\nStatus: Pending Scan"]:::success
+    M --> N
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    classDef error fill:#FFEEEB,stroke:#BF5547,color:#7A2E23
+    classDef empty fill:#FAF8F5,stroke:#E0DCD3,color:#6B6760,stroke-dasharray: 5 5
+    </pre>
+  </div>
+</div>
+
+<!-- FLOW 2: Scanning & Classification -->
+<div class="flow-card">
+  <div class="flow-card-header">
+    <div class="flow-number">2</div>
+    <div class="flow-title">Data Scanning & Classification</div>
+    <span class="flow-tag tag-core">Core</span>
+  </div>
+  <div class="flow-card-body">
+    <pre class="mermaid">
+flowchart TD
+    A(["Trigger Scan"]):::start --> C["Scan Running\nProgress View"]:::step
+
+    C --> D{"Scan\ncomplete?"}
+    D -->|"Success"| E["Scan Results\nSummary"]:::success
+    D -->|"Partial"| F["Results +\nError Report"]:::warning
+    D -->|"Failed"| G["Scan Failed\nRetry"]:::error
+
+    E --> H["Data Catalog\nUpdated"]:::page
+    F --> H
+
+    H --> I["Data Catalog\nList View"]:::page
+    I -->|"Click table"| K["Table Detail\nView"]:::page
+
+    K --> L["Columns with\nSuggested\nClassifications"]:::step
+
+    L --> M1["Accept\nSuggestion"]:::action
+    L --> M2["Override\nClassification"]:::action
+    L --> M3["Reject:\nNot Sensitive"]:::action
+    L --> M4["Bulk Accept\nAll > 90%"]:::action
+
+    M1 --> R["Classification\nSaved"]:::success
+    M2 --> R
+    M3 --> R
+    M4 --> R
+
+    R --> S["Risk Score\nUpdated"]:::success
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    classDef error fill:#FFEEEB,stroke:#BF5547,color:#7A2E23
+    classDef warning fill:#FCF9D9,stroke:#8A7515,color:#544608
+    </pre>
+  </div>
+</div>
+
+<!-- FLOW 3: Risk Assessment -->
+<div class="flow-card">
+  <div class="flow-card-header">
+    <div class="flow-number">3</div>
+    <div class="flow-title">Risk Assessment & Scoring</div>
+    <span class="flow-tag tag-core">Core</span>
+  </div>
+  <div class="flow-card-body">
+    <pre class="mermaid">
+flowchart TD
+    A(["Risk Dashboard"]):::start --> B{"Data\nclassified?"}
+    B -->|No| C["Empty State:\nComplete classification\nfirst"]:::empty
+    B -->|Yes| D["Risk Overview"]:::page
+
+    D --> E["Overall Risk Score\n0–100 with trend"]:::metric
+    D --> F["Risk by Category\nPCI / PII / PHI"]:::metric
+    D --> G["Compliance Status\nper Regulation"]:::metric
+    D --> H["Top Risks\nRequiring Attention"]:::metric
+
+    E -->|"Drill down"| I["Risk Detail\nView"]:::page
+
+    I --> K["Access Analysis"]:::page
+    K --> K1["Machine Access\nServices, APIs,\npipelines"]:::step
+    K --> K2["Human Access\nUsers, groups,\nroles"]:::step
+
+    I --> L["Regulation\nMapping"]:::page
+    L --> L1["GDPR"]:::step
+    L --> L2["CCPA"]:::step
+    L --> L3["HIPAA"]:::step
+    L --> L4["PCI-DSS"]:::step
+
+    I --> N["Recommendations"]:::page
+    N -->|"Act"| O["→ Remediation\nFlow"]:::action
+    N -->|"Defer"| Q["Acknowledge\nor Snooze"]:::step
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef metric fill:#FFFFFF,stroke:#013D5B,color:#013D5B
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef empty fill:#FAF8F5,stroke:#E0DCD3,color:#6B6760,stroke-dasharray: 5 5
+    </pre>
+  </div>
+</div>
+
+<!-- FLOW 4: Remediation -->
+<div class="flow-card">
+  <div class="flow-card-header">
+    <div class="flow-number">4</div>
+    <div class="flow-title">Remediation</div>
+    <span class="flow-tag tag-action">Action</span>
+  </div>
+  <div class="flow-card-body">
+    <pre class="mermaid">
+flowchart TD
+    A(["From Risk Detail\nor Recommendation"]):::start --> B["Remediation\nOptions"]:::page
+
+    B --> C{"Remediation\ntype?"}
+
+    C -->|"Tokenize"| D["Select\nTokenization\nPolicy"]:::step
+    D --> D2["Map Columns\nto Token Format"]:::step
+    D2 --> D3["Preview:\nBefore / After"]:::step
+    D3 --> D4["Apply\nTokenization"]:::action
+
+    C -->|"Revoke Access"| G["Select Users /\nMachines / Roles"]:::step
+    G --> G2["Impact Preview:\nWho loses access"]:::step
+    G2 --> G3["Confirm\nRevocation"]:::action
+
+    C -->|"Delete Data"| H["Select Tables /\nColumns"]:::step
+    H --> H2["Impact Preview:\nDependencies"]:::step
+    H2 --> H3["Type Confirmation\n+ Delete"]:::action
+
+    C -->|"Apply Policy"| I["Select Governance\nPolicy"]:::step
+    I --> I2["Preview Affected\nData"]:::step
+    I2 --> I3["Apply Policy"]:::action
+
+    D4 --> E["Risk Score\nReduced"]:::success
+    G3 --> E
+    H3 --> E
+    I3 --> E
+
+    E --> J["Remediation\nHistory Updated"]:::step
+    J --> K["Dashboard\nReflects Change"]:::success
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    </pre>
+  </div>
+</div>
+
+<!-- FLOW 5: Policy Management -->
+<div class="flow-card">
+  <div class="flow-card-header">
+    <div class="flow-number">5</div>
+    <div class="flow-title">Tokenization Policy Management</div>
+    <span class="flow-tag tag-action">Action</span>
+  </div>
+  <div class="flow-card-body">
+    <pre class="mermaid">
+flowchart TD
+    A(["Policies Page"]):::start --> B{"Any policies\nexist?"}
+    B -->|No| C["Empty State:\nCreate your first\npolicy"]:::empty
+    B -->|Yes| D["Policy\nList View"]:::page
+
+    C --> E["+ Create Policy"]:::action
+    D --> E
+    D -->|"Click row"| G["Policy\nDetail View"]:::page
+
+    E --> H["Step 1:\nPolicy Basics\nName, regulation"]:::step
+    H --> I["Step 2:\nClassification Rules\nPCI / PII / PHI"]:::step
+    I --> J["Step 3:\nToken Configuration\nFormat, preservation"]:::step
+    J --> K["Step 4:\nScope\nConnections, schemas"]:::step
+    K --> L["Step 5:\nReview & Create"]:::step
+    L --> M["Policy Created\nStatus: Draft"]:::success
+    M --> G
+
+    G --> N1["Apply to\nData"]:::action
+    G --> N2["Edit\nSettings"]:::step
+    G --> N3["Clone\nPolicy"]:::step
+    G --> N4["Disable"]:::step
+    G --> N5["Delete"]:::error
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    classDef error fill:#FFEEEB,stroke:#BF5547,color:#7A2E23
+    classDef empty fill:#FAF8F5,stroke:#E0DCD3,color:#6B6760,stroke-dasharray: 5 5
+    </pre>
+  </div>
+</div>
+
+<!-- FLOW 6: Dashboard & Monitoring -->
+<div class="flow-card">
+  <div class="flow-card-header">
+    <div class="flow-number">6</div>
+    <div class="flow-title">Risk Dashboard & Monitoring</div>
+    <span class="flow-tag tag-monitor">Monitor</span>
+  </div>
+  <div class="flow-card-body">
+    <pre class="mermaid">
+flowchart TD
+    A(["Dashboard\nDefault Landing"]):::start --> B["Risk Overview"]:::page
+
+    B --> C["Risk Score\n0–100 + Trend"]:::metric
+    B --> D["Protection Coverage\nProtected vs\nUnprotected %"]:::metric
+    B --> E["Compliance Cards\nper Regulation"]:::metric
+    B --> F["Top Risks\nRequiring Action"]:::metric
+    B --> G["Recent Activity\nFeed"]:::step
+
+    C -->|"Click score"| H["Risk Detail\nBreakdown"]:::page
+    D -->|"Click coverage"| I["Data Catalog\nfiltered: unprotected"]:::page
+    E -->|"Click regulation"| J["Regulation\nDetail"]:::page
+    F -->|"Click risk"| K["Risk Detail +\nRemediation"]:::page
+
+    J --> J1["Requirements\nChecklist"]:::step
+    J --> J2["Generate\nCompliance Report"]:::action
+
+    B --> L["Time Range\n7d / 30d / 90d"]:::step
+    B --> M["Export / Schedule\nReport"]:::action
+    M --> M1["PDF Report"]:::step
+    M --> M2["Scheduled Email\nDaily / Weekly"]:::step
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef metric fill:#FFFFFF,stroke:#013D5B,color:#013D5B
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    </pre>
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      fontSize: '13px',
+      primaryColor: '#EBF4F5',
+      primaryBorderColor: '#013D5B',
+      primaryTextColor: '#1C1A17',
+      lineColor: '#B0ABA2',
+      secondaryColor: '#FAF8F5',
+      tertiaryColor: '#FFFFFF',
+      edgeLabelBackground: '#FFFFFF',
+      clusterBkg: '#FAF8F5',
+      clusterBorder: '#E0DCD3'
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 16,
+      nodeSpacing: 30,
+      rankSpacing: 40,
+      htmlLabels: true,
+      useMaxWidth: true
+    }
+  });
+</script>
+
+</body>
+</html>

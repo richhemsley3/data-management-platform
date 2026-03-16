@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Security Product — Unified Flow Canvas</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --sds-bg-page: #FFFFFF;
+    --sds-bg-card: #FFFFFF;
+    --sds-text-primary: #1C1A17;
+    --sds-text-secondary: #54514D;
+    --sds-text-tertiary: #6B6760;
+    --sds-text-on-primary: #FFFFFF;
+    --sds-border-default: #E0DCD3;
+    --sds-border-subtle: #EBE6DD;
+    --sds-interactive-primary: #013D5B;
+    --sds-status-success-bg: #F4FAEB;
+    --sds-status-success-text: #62800B;
+    --sds-status-warning-bg: #FCF9D9;
+    --sds-status-warning-text: #8A7515;
+    --sds-status-error-bg: #FFEEEB;
+    --sds-status-error-text: #BF5547;
+    --sds-status-info-bg: #EBF4F5;
+    --sds-status-info-text: #0C4A69;
+    --sds-status-purple-text: #805AA1;
+
+    --stage-discover: #EBF4F5;
+    --stage-discover-border: #0C4A69;
+    --stage-classify: #E8F0F5;
+    --stage-classify-border: #0C4A69;
+    --stage-assess: #F4FAEB;
+    --stage-assess-border: #62800B;
+    --stage-remediate: #FCF9D9;
+    --stage-remediate-border: #8A7515;
+    --stage-track: #F7EEFF;
+    --stage-track-border: #805AA1;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: var(--sds-bg-page);
+    color: var(--sds-text-primary);
+  }
+
+  /* Toolbar */
+  #toolbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    height: 48px;
+    background: var(--sds-bg-card);
+    border-bottom: 1px solid var(--sds-border-default);
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  #toolbar .title { font-size: 14px; font-weight: 600; color: var(--sds-text-primary); white-space: nowrap; }
+  #toolbar .spacer { flex: 1; }
+
+  .zoom-level-badge {
+    font-size: 11px; font-weight: 600;
+    padding: 2px 10px; border-radius: 4px;
+    transition: background 0.3s, color 0.3s;
+  }
+  .zoom-level-badge[data-level="journey"] { background: var(--sds-interactive-primary); color: #fff; }
+  .zoom-level-badge[data-level="screens"] { background: var(--sds-status-info-bg); color: var(--sds-status-info-text); }
+  .zoom-level-badge[data-level="detail"] { background: var(--sds-status-success-bg); color: var(--sds-status-success-text); }
+
+  #zoom-pct { font-size: 12px; font-weight: 500; color: var(--sds-text-secondary); min-width: 42px; text-align: right; }
+
+  .tb-btn {
+    background: none; border: 1px solid var(--sds-border-default);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 12px; color: var(--sds-text-secondary); transition: background 0.15s;
+  }
+  .tb-btn:hover { background: var(--sds-border-subtle); }
+  #zoom-slider { width: 100px; accent-color: var(--sds-interactive-primary); }
+
+  /* Viewport */
+  #viewport {
+    position: fixed; top: 48px; left: 0; right: 0; bottom: 0;
+    overflow: hidden; cursor: grab;
+    background: radial-gradient(circle, var(--sds-border-default) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  #viewport.grabbing { cursor: grabbing; }
+
+  /* Canvas */
+  #canvas {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+  #canvas.animating { transition: transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1); }
+
+  /* Stage regions — solid light fills, no border, clear columns */
+  .stage-region {
+    position: absolute; border-radius: 20px; border: none;
+    opacity: 0.45; pointer-events: none;
+  }
+  .stage-region[data-stage="discover"] { background: var(--stage-discover); }
+  .stage-region[data-stage="classify"] { background: var(--stage-classify); }
+  .stage-region[data-stage="assess"] { background: var(--stage-assess); }
+  .stage-region[data-stage="remediate"] { background: var(--stage-remediate); }
+  .stage-region[data-stage="track"] { background: var(--stage-track); }
+
+  /* Vertical dividers between stages */
+  .stage-divider {
+    position: absolute;
+    width: 2px;
+    background: var(--sds-border-default);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* Stage labels — very large so readable when zoomed out */
+  .stage-label {
+    position: absolute;
+    font-size: 72px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 6px; pointer-events: none;
+    text-align: center;
+  }
+  .stage-label .stage-label-sub {
+    display: block;
+    font-size: 32px; font-weight: 500; letter-spacing: 1px;
+    text-transform: none; opacity: 0.6; margin-top: 8px;
+  }
+
+  /* Layer: Journey blocks (Level 1) */
+  #layer-journey { position: absolute; transition: opacity 0.3s; }
+
+  .journey-block {
+    position: absolute; border-radius: 16px; border: 3px solid;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; cursor: default; box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  .journey-block .jb-stage { font-size: 64px; font-weight: 800; text-transform: uppercase; letter-spacing: 4px; }
+  .journey-block .jb-icon { font-size: 100px; margin-bottom: 16px; }
+  .journey-arrow { position: absolute; pointer-events: none; }
+
+  /* Layer: Screen nodes (Level 2) */
+  #layer-screens { position: absolute; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #layer-screens.visible { opacity: 1; pointer-events: auto; }
+
+  .screen-node {
+    position: absolute; background: #fff; border: 4px solid var(--sds-border-default);
+    border-radius: 14px; padding: 20px 28px; font-size: 28px; font-weight: 600;
+    color: var(--sds-text-primary); text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08); white-space: nowrap; cursor: default;
+  }
+  .screen-node.entry { border-color: #805AA1; background: #F7EEFF; color: #805AA1; font-weight: 700; }
+  .screen-node.action { border-color: var(--sds-interactive-primary); background: var(--sds-interactive-primary); color: #fff; font-weight: 700; }
+  .screen-node.success { border-color: var(--sds-status-success-text); background: var(--sds-status-success-bg); }
+  .screen-node.page { border-color: var(--sds-status-info-text); background: var(--sds-status-info-bg); }
+
+  /* Layer: Detail (Level 3) — borderless, stitched together */
+  #layer-detail { position: absolute; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #layer-detail.visible { opacity: 1; pointer-events: auto; }
+
+  .detail-flow {
+    position: absolute;
+  }
+  .detail-flow .detail-tag {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; padding: 3px 10px; border-radius: 4px;
+    display: inline-block; margin-bottom: 8px;
+  }
+  .detail-flow .mermaid { display: flex; }
+  .detail-flow .mermaid svg { max-height: none; }
+
+  /* SVG connectors */
+  #connectors {
+    position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  #connectors.visible { opacity: 1; }
+
+  /* Onboarding bar */
+  .onboard-block {
+    position: absolute; border-radius: 12px; border: 2px dashed var(--stage-discover-border);
+    background: rgba(235, 244, 245, 0.3);
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; font-size: 48px; font-weight: 700;
+    color: var(--sds-status-info-text); letter-spacing: 2px;
+  }
+
+  /* Minimap */
+  #minimap {
+    position: fixed; bottom: 16px; right: 16px; z-index: 100;
+    width: 200px; height: 120px;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid var(--sds-border-default); border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;
+  }
+  #minimap canvas { width: 100%; height: 100%; }
+  #minimap-viewport {
+    position: absolute; border: 2px solid var(--sds-interactive-primary);
+    background: rgba(1, 61, 91, 0.08); border-radius: 2px; pointer-events: none;
+  }
+
+  #help-hint {
+    position: fixed; bottom: 16px; left: 16px; z-index: 100;
+    font-size: 11px; color: var(--sds-text-tertiary);
+    background: rgba(255,255,255,0.9); padding: 6px 12px; border-radius: 6px;
+    border: 1px solid var(--sds-border-subtle);
+  }
+</style>
+</head>
+<body>
+
+<!-- Toolbar -->
+<div id="toolbar">
+  <span class="title">Data Security Product — Unified Flow Map</span>
+  <span class="spacer"></span>
+  <span class="zoom-level-badge" id="level-badge" data-level="journey">Journey</span>
+  <button class="tb-btn" onclick="zoomTo(0.12)" title="Journey view">-</button>
+  <input type="range" id="zoom-slider" min="5" max="300" value="12">
+  <button class="tb-btn" onclick="zoomTo(1.0)" title="Detail view">+</button>
+  <span id="zoom-pct">12%</span>
+  <button class="tb-btn" onclick="fitAll()">Fit All</button>
+</div>
+
+<!-- Viewport -->
+<div id="viewport">
+  <div id="canvas">
+
+    <!-- Stage background regions — clear gaps between columns -->
+    <div class="stage-region" data-stage="discover"  style="left:40px;   top:160px; width:2380px; height:1700px;"></div>
+    <div class="stage-region" data-stage="classify"  style="left:2520px; top:160px; width:2360px; height:1700px;"></div>
+    <div class="stage-region" data-stage="assess"    style="left:4980px; top:160px; width:2360px; height:1700px;"></div>
+    <div class="stage-region" data-stage="remediate" style="left:7440px; top:160px; width:4760px; height:1700px;"></div>
+    <div class="stage-region" data-stage="track"     style="left:12300px; top:160px; width:2380px; height:1700px;"></div>
+
+    <!-- Vertical dividers between stages -->
+    <div class="stage-divider" style="left:2460px; top:80px; height:1800px;"></div>
+    <div class="stage-divider" style="left:4920px; top:80px; height:1800px;"></div>
+    <div class="stage-divider" style="left:7380px; top:80px; height:1800px;"></div>
+    <div class="stage-divider" style="left:12240px; top:80px; height:1800px;"></div>
+
+    <!-- Stage labels — prominent, above content -->
+    <div class="stage-label" style="left:40px; top:40px; width:2380px; color:var(--stage-discover-border);">Discover<span class="stage-label-sub">Flow 1 &middot; Flow 2a</span></div>
+    <div class="stage-label" style="left:2520px; top:40px; width:2360px; color:var(--stage-classify-border);">Classify<span class="stage-label-sub">Flow 2b</span></div>
+    <div class="stage-label" style="left:4980px; top:40px; width:2360px; color:var(--stage-assess-border);">Assess<span class="stage-label-sub">Flow 3</span></div>
+    <div class="stage-label" style="left:7440px; top:40px; width:4760px; color:var(--stage-remediate-border);">Remediate<span class="stage-label-sub">Flow 4 &middot; Flow 5</span></div>
+    <div class="stage-label" style="left:12300px; top:40px; width:2380px; color:var(--stage-track-border);">Track<span class="stage-label-sub">Flow 6</span></div>
+
+    <!-- ═══ LAYER 1: Journey Blocks ═══ -->
+    <div id="layer-journey">
+      <div class="journey-block" id="jb-discover" style="left:500px; top:650px; width:1400px; height:400px; background:var(--stage-discover); border-color:var(--stage-discover-border); color:var(--stage-discover-border);">
+        <span class="jb-icon">&#128270;</span>
+        <span class="jb-stage">Discover</span>
+      </div>
+      <div class="journey-block" id="jb-classify" style="left:2900px; top:650px; width:1400px; height:400px; background:var(--stage-classify); border-color:var(--stage-classify-border); color:var(--stage-classify-border);">
+        <span class="jb-icon">&#128196;</span>
+        <span class="jb-stage">Classify</span>
+      </div>
+      <div class="journey-block" id="jb-assess" style="left:5400px; top:650px; width:1400px; height:400px; background:var(--stage-assess); border-color:var(--stage-assess-border); color:var(--stage-assess-border);">
+        <span class="jb-icon">&#9888;&#65039;</span>
+        <span class="jb-stage">Assess</span>
+      </div>
+      <div class="journey-block" id="jb-remediate" style="left:8000px; top:650px; width:2400px; height:400px; background:var(--stage-remediate); border-color:var(--stage-remediate-border); color:var(--stage-remediate-border);">
+        <span class="jb-icon">&#128737;</span>
+        <span class="jb-stage">Remediate</span>
+      </div>
+      <div class="journey-block" id="jb-track" style="left:12600px; top:650px; width:1400px; height:400px; background:var(--stage-track); border-color:var(--stage-track-border); color:var(--stage-track-border);">
+        <span class="jb-icon">&#128202;</span>
+        <span class="jb-stage">Track</span>
+      </div>
+
+      <!-- Journey arrows (centered on blocks at y=850) -->
+      <svg class="journey-arrow" style="left:1900px; top:810px;" width="1000" height="80" viewBox="0 0 1000 80">
+        <defs><marker id="jArrow" markerWidth="16" markerHeight="12" refX="14" refY="6" orient="auto"><polygon points="0 0, 16 6, 0 12" fill="#013D5B"/></marker></defs>
+        <line x1="0" y1="40" x2="980" y2="40" stroke="#013D5B" stroke-width="8" marker-end="url(#jArrow)"/>
+      </svg>
+      <svg class="journey-arrow" style="left:4300px; top:810px;" width="1100" height="80" viewBox="0 0 1100 80">
+        <line x1="0" y1="40" x2="1080" y2="40" stroke="#013D5B" stroke-width="8" marker-end="url(#jArrow)"/>
+      </svg>
+      <svg class="journey-arrow" style="left:6800px; top:810px;" width="1200" height="80" viewBox="0 0 1200 80">
+        <line x1="0" y1="40" x2="1180" y2="40" stroke="#013D5B" stroke-width="8" marker-end="url(#jArrow)"/>
+      </svg>
+      <svg class="journey-arrow" style="left:10400px; top:810px;" width="2200" height="80" viewBox="0 0 2200 80">
+        <line x1="0" y1="40" x2="2180" y2="40" stroke="#013D5B" stroke-width="8" marker-end="url(#jArrow)"/>
+      </svg>
+
+      <!-- Loop arrow: Track → Assess -->
+      <svg class="journey-arrow" style="left:5600px; top:1050px;" width="8600" height="250" viewBox="0 0 8600 250">
+        <defs><marker id="jLoop" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#805AA1"/></marker></defs>
+        <path d="M8400,0 L8400,160 Q8400,200 8360,200 L40,200 Q0,200 0,160 L0,0" stroke="#805AA1" stroke-width="3" fill="none" stroke-dasharray="8 4" marker-end="url(#jLoop)"/>
+        <text x="4200" y="195" text-anchor="middle" fill="#805AA1" font-size="48" font-weight="600">Risk changes trigger re-assessment</text>
+      </svg>
+
+      <!-- Onboarding bar -->
+      <div class="onboard-block" style="left:500px; top:1450px; width:13500px; height:120px;">
+        Flow 7: Onboarding — guided path through all stages
+      </div>
+    </div>
+
+    <!-- ═══ LAYER 2: Screen Nodes ═══ -->
+    <div id="layer-screens">
+      <!-- DISCOVER: Flow 1 screens (horizontal, 370px spacing) -->
+      <div class="screen-node entry" style="left:100px; top:250px;">Connections Page</div>
+      <div class="screen-node" style="left:470px; top:250px;">Platform Select</div>
+      <div class="screen-node" style="left:840px; top:250px;">Configure Creds</div>
+      <div class="screen-node" style="left:1210px; top:250px;">Test Connection</div>
+      <div class="screen-node" style="left:1580px; top:250px;">Select Schemas</div>
+      <div class="screen-node page" style="left:1950px; top:250px;">Connection Detail</div>
+      <div class="screen-node success" style="left:2320px; top:250px;">Save + Start Scan</div>
+
+      <!-- DISCOVER: Flow 2a screens (470px spacing) -->
+      <div class="screen-node entry" style="left:100px; top:550px;">Trigger Scan</div>
+      <div class="screen-node" style="left:570px; top:550px;">Scan Progress</div>
+      <div class="screen-node" style="left:1040px; top:550px;">Scan Summary</div>
+      <div class="screen-node" style="left:1510px; top:550px;">Schema Drift</div>
+      <div class="screen-node page" style="left:1980px; top:550px;">Data Catalog</div>
+
+      <!-- CLASSIFY: Flow 2b screens (450px spacing) -->
+      <div class="screen-node entry" style="left:2580px; top:250px;">Review Queue</div>
+      <div class="screen-node" style="left:3030px; top:250px;">Single Review</div>
+      <div class="screen-node" style="left:3480px; top:250px;">Batch Review</div>
+      <div class="screen-node" style="left:3930px; top:250px;">Accept / Override</div>
+      <div class="screen-node success" style="left:4380px; top:250px;">Risk Score Recalc</div>
+      <div class="screen-node page" style="left:3030px; top:550px;">Classification Rules</div>
+      <div class="screen-node page" style="left:3580px; top:550px;">Consistency Check</div>
+
+      <!-- ASSESS: Flow 3 screens (500px spacing) -->
+      <div class="screen-node entry" style="left:5080px; top:250px;">Risk Dashboard</div>
+      <div class="screen-node" style="left:5580px; top:250px;">Executive View</div>
+      <div class="screen-node" style="left:6080px; top:250px;">Risk Score 0-100</div>
+      <div class="screen-node page" style="left:6580px; top:250px;">Risk Detail</div>
+      <div class="screen-node" style="left:5580px; top:550px;">Governance View</div>
+      <div class="screen-node" style="left:6080px; top:550px;">Operations View</div>
+      <div class="screen-node" style="left:6580px; top:550px;">Risk Simulation</div>
+      <div class="screen-node action" style="left:7000px; top:400px;">Remediate</div>
+
+      <!-- REMEDIATE: Flow 4 screens (520px spacing) -->
+      <div class="screen-node entry" style="left:7540px; top:250px;">Configure Remediation</div>
+      <div class="screen-node" style="left:8060px; top:250px;">Action Type Select</div>
+      <div class="screen-node page" style="left:8580px; top:250px;">Preview + Dry Run</div>
+      <div class="screen-node" style="left:9100px; top:250px;">Approval Check</div>
+      <div class="screen-node" style="left:9620px; top:250px;">Submit Approval</div>
+      <div class="screen-node page" style="left:10140px; top:250px;">Approval Review</div>
+      <div class="screen-node action" style="left:10660px; top:250px;">Execute</div>
+      <div class="screen-node success" style="left:11180px; top:250px;">Success</div>
+
+      <!-- REMEDIATE: Flow 5 screens (520px spacing) -->
+      <div class="screen-node entry" style="left:7540px; top:550px;">Policies Page</div>
+      <div class="screen-node" style="left:8060px; top:550px;">Template Gallery</div>
+      <div class="screen-node" style="left:8580px; top:550px;">Create Policy</div>
+      <div class="screen-node" style="left:9100px; top:550px;">Token Config</div>
+      <div class="screen-node" style="left:9620px; top:550px;">Impact Preview</div>
+      <div class="screen-node page" style="left:10140px; top:550px;">Policy Detail</div>
+      <div class="screen-node action" style="left:10660px; top:550px;">Apply Policy</div>
+
+      <!-- TRACK: Flow 6 screens (500px spacing) -->
+      <div class="screen-node entry" style="left:12400px; top:250px;">Dashboard Landing</div>
+      <div class="screen-node" style="left:12900px; top:250px;">Alert Ribbon</div>
+      <div class="screen-node" style="left:13400px; top:250px;">View Toggle</div>
+      <div class="screen-node page" style="left:13900px; top:250px;">Activity Feed</div>
+      <div class="screen-node" style="left:12900px; top:550px;">Reports</div>
+      <div class="screen-node action" style="left:13400px; top:550px;">Quick Actions</div>
+      <div class="screen-node" style="left:13900px; top:550px;">Universal Search</div>
+
+      <!-- Onboarding nodes -->
+      <div class="screen-node entry" style="left:200px; top:850px;">Welcome</div>
+      <div class="screen-node" style="left:1300px; top:850px;">Persona Select</div>
+      <div class="screen-node" style="left:2700px; top:850px;">Connect Source</div>
+      <div class="screen-node" style="left:4100px; top:850px;">First Scan</div>
+      <div class="screen-node" style="left:5400px; top:850px;">Review 5 Items</div>
+      <div class="screen-node" style="left:7000px; top:850px;">Risk Score Reveal</div>
+      <div class="screen-node" style="left:8800px; top:850px;">First Remediation</div>
+      <div class="screen-node success" style="left:11000px; top:850px;">Complete</div>
+      <div class="screen-node page" style="left:13600px; top:850px;">Full Dashboard</div>
+    </div>
+
+    <!-- ═══ SVG CONNECTORS (Level 2+) ═══ -->
+    <svg id="connectors" width="15000" height="2000" viewBox="0 0 15000 2000">
+      <defs>
+        <marker id="cArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#013D5B" opacity="0.7"/>
+        </marker>
+        <marker id="cArrowGreen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#62800B" opacity="0.7"/>
+        </marker>
+        <marker id="cArrowYellow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#8A7515" opacity="0.7"/>
+        </marker>
+        <marker id="cArrowPurple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#805AA1" opacity="0.7"/>
+        </marker>
+      </defs>
+
+      <!-- Discover Flow 1 internal (y:270, spacing 370) -->
+      <g stroke="#0C4A69" stroke-width="3" fill="none" opacity="0.4">
+        <line x1="350" y1="270" x2="465" y2="270" marker-end="url(#cArrow)"/>
+        <line x1="720" y1="270" x2="835" y2="270" marker-end="url(#cArrow)"/>
+        <line x1="1090" y1="270" x2="1205" y2="270" marker-end="url(#cArrow)"/>
+        <line x1="1460" y1="270" x2="1575" y2="270" marker-end="url(#cArrow)"/>
+        <line x1="1830" y1="270" x2="1945" y2="270" marker-end="url(#cArrow)"/>
+        <line x1="2200" y1="270" x2="2315" y2="270" marker-end="url(#cArrow)"/>
+        <!-- Flow 2a (y:570, spacing 470) -->
+        <line x1="350" y1="570" x2="565" y2="570" marker-end="url(#cArrow)"/>
+        <line x1="820" y1="570" x2="1035" y2="570" marker-end="url(#cArrow)"/>
+        <line x1="1290" y1="570" x2="1505" y2="570" marker-end="url(#cArrow)"/>
+        <line x1="1760" y1="570" x2="1975" y2="570" marker-end="url(#cArrow)"/>
+      </g>
+
+      <!-- Cross-flow: Discover → Classify -->
+      <path d="M2520,285 Q2550,400 2550,570 Q2550,650 2580,270" stroke="#013D5B" stroke-width="3" fill="none" stroke-dasharray="8 4" marker-end="url(#cArrow)" opacity="0.6"/>
+
+      <!-- Classify internal (y:270, spacing 450) -->
+      <g stroke="#0C4A69" stroke-width="3" fill="none" opacity="0.4">
+        <line x1="2830" y1="270" x2="3025" y2="270" marker-end="url(#cArrow)"/>
+        <line x1="3280" y1="270" x2="3475" y2="270" marker-end="url(#cArrow)"/>
+        <line x1="3730" y1="270" x2="3925" y2="270" marker-end="url(#cArrow)"/>
+        <line x1="4180" y1="270" x2="4375" y2="270" marker-end="url(#cArrow)"/>
+      </g>
+
+      <!-- Cross-flow: Classify → Assess -->
+      <path d="M4580,270 Q4830,270 4830,270 Q4830,270 5080,270" stroke="#62800B" stroke-width="3" fill="none" stroke-dasharray="8 4" marker-end="url(#cArrowGreen)" opacity="0.6"/>
+
+      <!-- Assess internal (y:270, spacing 500) -->
+      <g stroke="#62800B" stroke-width="3" fill="none" opacity="0.4">
+        <line x1="5330" y1="270" x2="5575" y2="270" marker-end="url(#cArrowGreen)"/>
+        <line x1="5830" y1="270" x2="6075" y2="270" marker-end="url(#cArrowGreen)"/>
+        <line x1="6330" y1="270" x2="6575" y2="270" marker-end="url(#cArrowGreen)"/>
+        <line x1="6830" y1="420" x2="6995" y2="420" marker-end="url(#cArrowGreen)"/>
+      </g>
+
+      <!-- Cross-flow: Assess → Remediate -->
+      <path d="M7200,420 Q7370,420 7370,270 Q7370,270 7540,270" stroke="#8A7515" stroke-width="3" fill="none" stroke-dasharray="8 4" marker-end="url(#cArrowYellow)" opacity="0.6"/>
+
+      <!-- Remediate Flow 4 internal (y:270, spacing 520) -->
+      <g stroke="#8A7515" stroke-width="3" fill="none" opacity="0.4">
+        <line x1="7840" y1="270" x2="8055" y2="270" marker-end="url(#cArrowYellow)"/>
+        <line x1="8360" y1="270" x2="8575" y2="270" marker-end="url(#cArrowYellow)"/>
+        <line x1="8880" y1="270" x2="9095" y2="270" marker-end="url(#cArrowYellow)"/>
+        <line x1="9400" y1="270" x2="9615" y2="270" marker-end="url(#cArrowYellow)"/>
+        <line x1="9920" y1="270" x2="10135" y2="270" marker-end="url(#cArrowYellow)"/>
+        <line x1="10440" y1="270" x2="10655" y2="270" marker-end="url(#cArrowYellow)"/>
+        <line x1="10960" y1="270" x2="11175" y2="270" marker-end="url(#cArrowYellow)"/>
+      </g>
+
+      <!-- Remediate Flow 5 internal (y:570, spacing 520) -->
+      <g stroke="#8A7515" stroke-width="3" fill="none" opacity="0.4">
+        <line x1="7840" y1="570" x2="8055" y2="570" marker-end="url(#cArrowYellow)"/>
+        <line x1="8360" y1="570" x2="8575" y2="570" marker-end="url(#cArrowYellow)"/>
+        <line x1="8880" y1="570" x2="9095" y2="570" marker-end="url(#cArrowYellow)"/>
+        <line x1="9400" y1="570" x2="9615" y2="570" marker-end="url(#cArrowYellow)"/>
+        <line x1="9920" y1="570" x2="10135" y2="570" marker-end="url(#cArrowYellow)"/>
+        <line x1="10440" y1="570" x2="10655" y2="570" marker-end="url(#cArrowYellow)"/>
+      </g>
+
+      <!-- Cross-flow: Policy Apply → Remediation -->
+      <path d="M10860,570 Q11050,570 11050,420 Q11050,270 10660,270" stroke="#8A7515" stroke-width="3" fill="none" stroke-dasharray="6 3" marker-end="url(#cArrowYellow)" opacity="0.5"/>
+      <!-- Cross-flow: Remediation → Policy (create inline) -->
+      <path d="M8360,285 Q8400,420 8400,570 Q8400,570 8580,570" stroke="#8A7515" stroke-width="2.5" fill="none" stroke-dasharray="4 3" marker-end="url(#cArrowYellow)" opacity="0.35"/>
+
+      <!-- Cross-flow: Success → Dashboard -->
+      <path d="M11380,270 Q11890,270 11890,270 Q11890,270 12400,270" stroke="#805AA1" stroke-width="3" fill="none" stroke-dasharray="8 4" marker-end="url(#cArrowPurple)" opacity="0.6"/>
+
+      <!-- Track internal (y:270, spacing 500) -->
+      <g stroke="#805AA1" stroke-width="3" fill="none" opacity="0.4">
+        <line x1="12650" y1="270" x2="12895" y2="270" marker-end="url(#cArrowPurple)"/>
+        <line x1="13150" y1="270" x2="13395" y2="270" marker-end="url(#cArrowPurple)"/>
+        <line x1="13650" y1="270" x2="13895" y2="270" marker-end="url(#cArrowPurple)"/>
+      </g>
+
+      <!-- Cross-flow: Dashboard → Risk (loop back) -->
+      <path d="M14100,550 Q14300,700 14300,950 Q14300,1000 5080,1000 Q4900,950 4900,550 Q4900,270 5080,270" stroke="#805AA1" stroke-width="3" fill="none" stroke-dasharray="8 4" marker-end="url(#cArrowPurple)" opacity="0.4"/>
+
+      <!-- Cross-flow: Dashboard → Connections (health) -->
+      <path d="M13100,570 Q13100,950 200,950 Q100,900 100,270 Q100,270 100,270" stroke="#0C4A69" stroke-width="2.5" fill="none" stroke-dasharray="4 3" marker-end="url(#cArrow)" opacity="0.25"/>
+
+      <!-- Cross-flow: Review Queue → Remediation direct -->
+      <path d="M3930,285 Q4500,350 7400,350 Q7500,300 7540,270" stroke="#8A7515" stroke-width="2.5" fill="none" stroke-dasharray="4 3" marker-end="url(#cArrowYellow)" opacity="0.3"/>
+
+      <!-- Onboarding horizontal chain (y:870) -->
+      <g stroke="#0C4A69" stroke-width="3" fill="none" opacity="0.3">
+        <line x1="450" y1="870" x2="1295" y2="870" marker-end="url(#cArrow)"/>
+        <line x1="1550" y1="870" x2="2695" y2="870" marker-end="url(#cArrow)"/>
+        <line x1="2950" y1="870" x2="4095" y2="870" marker-end="url(#cArrow)"/>
+        <line x1="4350" y1="870" x2="5395" y2="870" marker-end="url(#cArrow)"/>
+        <line x1="5650" y1="870" x2="6995" y2="870" marker-end="url(#cArrow)"/>
+        <line x1="7250" y1="870" x2="8795" y2="870" marker-end="url(#cArrow)"/>
+        <line x1="9050" y1="870" x2="10995" y2="870" marker-end="url(#cArrow)"/>
+        <line x1="11250" y1="870" x2="13595" y2="870" marker-end="url(#cArrow)"/>
+      </g>
+    </svg>
+
+    <!-- ═══ LAYER 3: Stitched Mermaid Detail ═══ -->
+    <div id="layer-detail">
+
+      <!-- Flow 1: Discover — positioned left -->
+      <div class="detail-flow" style="left:60px; top:180px; width:2360px;">
+        <span class="detail-tag" style="background:var(--stage-discover); color:var(--stage-discover-border);">Flow 1 &middot; Data Source Connections</span>
+        <pre class="mermaid">
+flowchart LR
+    A(["Connections\nPage"]):::start --> B{"Any connections\nexist?"}
+    B -->|No| C["Empty State"]:::empty
+    B -->|Yes| D["Connection List"]:::page
+
+    C --> E["+ Add Connection"]:::action
+    D --> E
+    D -->|"Click row"| N["Connection\nDetail"]:::page
+
+    E --> F["Select Platform +\nConfigure Credentials"]:::step
+    F --> F1{"OAuth?"}
+    F1 -->|Yes| F2["OAuth\nQuick Connect"]:::action
+    F1 -->|No| F3["Manual\ncredentials"]:::step
+    F2 --> H["Test\nConnection"]:::step
+    F3 --> H
+
+    H --> I{"Test\nresult?"}
+    I -->|Success| J["Select\nSchemas"]:::step
+    I -->|Failure| K1["Error +\nRetry"]:::error
+    K1 --> F3
+
+    J --> L["Save\nConnection"]:::action
+    L --> M{"Start\nscan?"}
+    M -->|Yes| P["→ Scan\nFlow 2"]:::success
+    M -->|No| N
+
+    N --> N1{"Health?"}
+    N1 -->|Active| N2["Healthy"]:::success
+    N1 -->|Error| N4["Reconnect"]:::error
+    N4 --> H
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    classDef error fill:#FFEEEB,stroke:#BF5547,color:#7A2E23
+    classDef warning fill:#FCF9D9,stroke:#8A7515,color:#544608
+    classDef empty fill:#FAF8F5,stroke:#E0DCD3,color:#6B6760,stroke-dasharray: 5 5
+        </pre>
+      </div>
+
+      <!-- Flow 2: Scan & Classify — positioned right of Flow 1 -->
+      <div class="detail-flow" style="left:2520px; top:180px; width:2360px;">
+        <span class="detail-tag" style="background:var(--stage-classify); color:var(--stage-classify-border);">Flow 2 &middot; Scanning & Classification</span>
+        <pre class="mermaid">
+flowchart LR
+    A(["Trigger\nScan"]):::start --> C["Scan\nProgress"]:::step
+    C --> D{"Result?"}
+    D -->|Success| E["Scan\nSummary"]:::success
+    D -->|Partial| F["Partial +\nRetry"]:::warning
+    D -->|Failed| G["Error"]:::error
+
+    E --> H{"Schema\ndrift?"}
+    H -->|Yes| H1["Drift\nAlert"]:::warning
+    H -->|No| I["Data\nCatalog"]:::page
+    H1 --> I
+
+    I --> J(["Review\nQueue"]):::start
+
+    J --> J1["Pending\nItems"]:::page
+    J --> RU["Classification\nRules"]:::page
+    J --> CO["Consistency\nCheck"]:::page
+
+    J1 --> J2{"Mode?"}
+    J2 -->|Single| K["Column\nDetail"]:::step
+    J2 -->|Batch| L["Table\nReview"]:::step
+    J2 -->|Bulk| M["Bulk\nAccept"]:::step
+
+    K --> K1{"Decision?"}
+    K1 -->|Accept| N1["Confirmed"]:::success
+    K1 -->|Override| O["Override +\nJustify"]:::step
+    K1 -->|Reject| P["Not\nSensitive"]:::step
+
+    O --> N1
+    L --> N1
+    M --> N1
+    P --> N1
+
+    N1 --> Q["Risk Score\nRecalculated →"]:::success
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    classDef error fill:#FFEEEB,stroke:#BF5547,color:#7A2E23
+    classDef warning fill:#FCF9D9,stroke:#8A7515,color:#544608
+        </pre>
+      </div>
+
+      <!-- Flow 3: Assess — positioned right of Flow 2 -->
+      <div class="detail-flow" style="left:4980px; top:180px; width:2360px;">
+        <span class="detail-tag" style="background:var(--stage-assess); color:var(--stage-assess-border);">Flow 3 &middot; Risk Assessment</span>
+        <pre class="mermaid">
+flowchart LR
+    A(["Risk\nDashboard"]):::start --> B{"Data\nclassified?"}
+    B -->|No| C["Empty State"]:::empty
+    B -->|Yes| D["Dashboard +\nView Toggle"]:::page
+
+    D --> V{"View?"}
+    V -->|Executive| V1["Score +\nTrend"]:::metric
+    V -->|Governance| V2["Regulations +\nGaps"]:::metric
+    V -->|Operations| V3["Health +\nFreshness"]:::metric
+
+    D --> E["Risk Score\n0–100"]:::metric
+    E --> E1{"Changed?"}
+    E1 -->|Yes| E2["What\nChanged"]:::step
+    E1 -->|No| E3["Stable"]:::step
+
+    E -->|"Drill down"| I["Risk\nDetail"]:::page
+    I --> I1["Risk\nFactors"]:::step
+    I --> I2["Access\nAnalysis"]:::step
+    I --> I4["Recommend-\nations"]:::step
+
+    I4 --> K{"Action?"}
+    K -->|Remediate| L["→ Flow 4"]:::action
+    K -->|Simulate| M["Risk\nSimulation"]:::step
+    K -->|Snooze| SN["Snooze"]:::step
+
+    M --> M1["Projected\nScore"]:::metric
+    M1 -->|Proceed| L
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef metric fill:#FFFFFF,stroke:#013D5B,color:#013D5B
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef empty fill:#FAF8F5,stroke:#E0DCD3,color:#6B6760,stroke-dasharray: 5 5
+        </pre>
+      </div>
+
+      <!-- Flow 4: Remediate — positioned right of Flow 3 -->
+      <div class="detail-flow" style="left:7440px; top:180px; width:2360px;">
+        <span class="detail-tag" style="background:var(--stage-remediate); color:var(--stage-remediate-border);">Flow 4 &middot; Remediation & Approval</span>
+        <pre class="mermaid">
+flowchart LR
+    A(["From Risk /\nQueue /\nDashboard"]):::start --> A1["Context\nLoaded"]:::step
+
+    A1 --> B["Configure"]:::page
+    B --> B1{"Action?"}
+    B1 -->|Tokenize| B2["Select\nPolicy"]:::step
+    B1 -->|Revoke| B3["Select\nGrants"]:::step
+    B1 -->|Delete| B4["Confirm\nTables"]:::step
+
+    B2 --> C["Preview"]:::page
+    B3 --> C
+    B4 --> C
+
+    C --> C1["Before/After +\nRisk Delta"]:::metric
+    C1 --> D0{"Approval?"}
+    D0 -->|Yes| APR1["Submit\nApproval"]:::step
+    D0 -->|No| D
+
+    APR1 --> APR2["Pending"]:::warning
+    APR2 --> APR4["Approval\nReview"]:::page
+    APR4 --> APR5{"Decision?"}
+    APR5 -->|Approve| D
+    APR5 -->|Reject| APR7["Rejected"]:::error
+    APR7 --> B
+
+    D["Execute"]:::action
+    D --> E{"Result?"}
+    E -->|Success| F["Score\nReduced →"]:::success
+    E -->|Partial| G["Retry\nFailed"]:::warning
+    E -->|Failed| GE["Error"]:::error
+
+    F --> I{"Next?"}
+    I -->|Dashboard| I1["→ Flow 6"]:::page
+    I -->|History| I2["Remediation\nHistory"]:::page
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef metric fill:#FFFFFF,stroke:#013D5B,color:#013D5B
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    classDef error fill:#FFEEEB,stroke:#BF5547,color:#7A2E23
+    classDef warning fill:#FCF9D9,stroke:#8A7515,color:#544608
+        </pre>
+      </div>
+
+      <!-- Flow 5: Policy — positioned below Flow 4 -->
+      <div class="detail-flow" style="left:7440px; top:1050px; width:2360px;">
+        <span class="detail-tag" style="background:var(--stage-remediate); color:var(--stage-remediate-border);">Flow 5 &middot; Policy Management</span>
+        <pre class="mermaid">
+flowchart LR
+    A(["Policies\nPage"]):::start --> B{"Any\npolicies?"}
+    B -->|No| C["Templates\nGallery"]:::empty
+    B -->|Yes| D["Policy\nList"]:::page
+
+    C --> E{"From?"}
+    D --> E
+    E -->|Template| E1["Choose\nTemplate"]:::step
+    E -->|Scratch| E2["Blank\nWizard"]:::step
+
+    E1 --> H["Configure\nBasics"]:::step
+    E2 --> H
+
+    H --> I["Token\nConfig"]:::step
+    I --> I2["Test\nSamples"]:::step
+    I2 --> J["Scope +\nImpact"]:::step
+    J --> J1["Risk Score\nProjection"]:::metric
+    J1 --> K["Create\nDraft"]:::success
+    K --> G["Policy\nDetail"]:::page
+
+    G --> L{"Action?"}
+    L -->|Apply| M["→ Flow 4\nRemediate"]:::action
+    L -->|Edit| N["New\nVersion"]:::step
+    L -->|Toggle| P["Active /\nDisabled"]:::step
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef metric fill:#FFFFFF,stroke:#013D5B,color:#013D5B
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+    classDef error fill:#FFEEEB,stroke:#BF5547,color:#7A2E23
+    classDef empty fill:#FAF8F5,stroke:#E0DCD3,color:#6B6760,stroke-dasharray: 5 5
+        </pre>
+      </div>
+
+      <!-- Flow 6: Track — positioned right of Flow 4 -->
+      <div class="detail-flow" style="left:12300px; top:180px; width:2360px;">
+        <span class="detail-tag" style="background:var(--stage-track); color:var(--stage-track-border);">Flow 6 &middot; Dashboard & Monitoring</span>
+        <pre class="mermaid">
+flowchart LR
+    A(["Dashboard"]):::start --> A2{"Alert?"}
+    A2 -->|Yes| A3["Alert\nRibbon"]:::warning
+    A2 -->|No| B
+    A3 --> B["Risk\nDashboard"]:::page
+
+    B --> B1["View Toggle"]:::step
+    B1 -->|Executive| C["Score +\nTrend"]:::metric
+    B1 -->|Governance| D["Queue +\nRegulations"]:::metric
+    B1 -->|Operations| E["Health +\nFreshness"]:::metric
+
+    C -->|"Drill down"| H["→ Risk Detail\nFlow 3"]:::page
+    D -->|"Click queue"| RQ["→ Review Queue\nFlow 2"]:::page
+    E -->|"Click conn"| CL["→ Connection\nFlow 1"]:::page
+
+    B --> F["Activity\nFeed"]:::step
+    B --> N["Reports"]:::step
+    N --> N1["Generate"]:::action
+    N --> N2["Schedule"]:::step
+
+    B --> S["Universal\nSearch ⌘K"]:::action
+    S --> S1["Results by\nEntity Type"]:::page
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef metric fill:#FFFFFF,stroke:#013D5B,color:#013D5B
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef warning fill:#FCF9D9,stroke:#8A7515,color:#544608
+        </pre>
+      </div>
+
+      <!-- Flow 7: Onboarding — horizontal bar at bottom -->
+      <div class="detail-flow" style="left:60px; top:1900px; width:14600px;">
+        <span class="detail-tag" style="background:var(--stage-discover); color:var(--stage-discover-border);">Flow 7 &middot; Onboarding</span>
+        <pre class="mermaid">
+flowchart LR
+    A(["Sign Up"]):::start --> B["Welcome"]:::page
+    B --> B0{"Type?"}
+    B0 -->|Skip| SK["Full Dashboard"]:::page
+    B0 -->|Continue| B1["Persona\nSelection"]:::step
+
+    B1 --> B2{"Persona?"}
+    B2 -->|Jordan| B3["Ops\nDefault"]:::step
+    B2 -->|Priya| B4["Gov\nDefault"]:::step
+    B2 -->|Marcus| B5["Exec\nDefault"]:::step
+
+    B3 --> C["Onboarding\nDashboard"]:::page
+    B4 --> C
+    B5 --> B5a{"Path?"}
+    B5a -->|Demo| MD["Interactive\nDemo"]:::page
+    B5a -->|Setup| C
+    MD --> C
+
+    C --> D["Step 1:\nConnect Source"]:::step
+    D --> D4["Test +\nConfirm"]:::step
+    D4 --> D5["Done"]:::success
+
+    D5 --> E["Step 2:\nFirst Scan"]:::step
+    E --> E2["N tables\nM sensitive"]:::success
+
+    E2 --> F["Step 3:\nReview 5 Items"]:::step
+    F --> F2["Done"]:::success
+
+    F2 --> G["Step 4:\nRisk Score\nReveal"]:::page
+    G --> G2["Done"]:::success
+
+    G2 --> H["Step 5:\nFirst Action"]:::step
+    H --> H1{"Risk?"}
+    H1 -->|Low| H2["Monitor\nSetup"]:::step
+    H1 -->|High| H3["Guided\nRemediation"]:::step
+
+    H2 --> I["Complete"]:::success
+    H3 --> I
+    I --> I1["Dashboard\nRevealed"]:::page
+
+    classDef start fill:#F7EEFF,stroke:#805AA1,color:#805AA1,stroke-width:2px
+    classDef page fill:#EBF4F5,stroke:#0C4A69,color:#031E36
+    classDef step fill:#FFFFFF,stroke:#E0DCD3,color:#1C1A17
+    classDef action fill:#013D5B,stroke:#013D5B,color:#FFFFFF
+    classDef success fill:#F4FAEB,stroke:#62800B,color:#374A1E
+        </pre>
+      </div>
+
+    </div><!-- /layer-detail -->
+
+  </div><!-- /canvas -->
+</div><!-- /viewport -->
+
+<!-- Minimap -->
+<div id="minimap">
+  <canvas id="minimap-canvas" width="400" height="240"></canvas>
+  <div id="minimap-viewport"></div>
+</div>
+
+<div id="help-hint">Scroll to zoom &middot; Drag to pan &middot; Double-click to fit all</div>
+
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      fontSize: '13px',
+      primaryColor: '#EBF4F5',
+      primaryBorderColor: '#013D5B',
+      primaryTextColor: '#1C1A17',
+      lineColor: '#B0ABA2',
+      secondaryColor: '#FAF8F5',
+      tertiaryColor: '#FFFFFF',
+      edgeLabelBackground: '#FFFFFF',
+      clusterBkg: '#FAF8F5',
+      clusterBorder: '#E0DCD3'
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 16,
+      nodeSpacing: 30,
+      rankSpacing: 40,
+      htmlLabels: true,
+      useMaxWidth: true
+    }
+  });
+
+  // ── State ──
+  const MIN_SCALE = 0.03, MAX_SCALE = 3;
+  const LEVEL_SCREENS = 0.18, LEVEL_DETAIL = 0.45;
+
+  const state = { x: 0, y: 0, scale: 0.08, dragging: false, dragStart: null, pinchDist: null };
+
+  const viewport = document.getElementById('viewport');
+  const canvas = document.getElementById('canvas');
+  const slider = document.getElementById('zoom-slider');
+  const pctEl = document.getElementById('zoom-pct');
+  const levelBadge = document.getElementById('level-badge');
+  const layerJourney = document.getElementById('layer-journey');
+  const layerScreens = document.getElementById('layer-screens');
+  const layerDetail = document.getElementById('layer-detail');
+  const connectors = document.getElementById('connectors');
+
+  // ── Transform ──
+  function applyTransform(animate) {
+    if (animate) {
+      canvas.classList.add('animating');
+      setTimeout(() => canvas.classList.remove('animating'), 450);
+    }
+    canvas.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+    slider.value = Math.round(state.scale * 100);
+    pctEl.textContent = Math.round(state.scale * 100) + '%';
+    updateLayers();
+    updateMinimap();
+  }
+
+  function updateLayers() {
+    const s = state.scale;
+    let level = 'journey';
+    if (s >= LEVEL_DETAIL) level = 'detail';
+    else if (s >= LEVEL_SCREENS) level = 'screens';
+    levelBadge.dataset.level = level;
+    levelBadge.textContent = level === 'journey' ? 'Journey' : level === 'screens' ? 'Screens' : 'Detail';
+
+    layerJourney.style.opacity = s >= LEVEL_DETAIL ? 0.08 : s >= LEVEL_SCREENS ? 0.25 : 1;
+
+    if (s >= LEVEL_SCREENS) { layerScreens.classList.add('visible'); } else { layerScreens.classList.remove('visible'); }
+    if (s >= LEVEL_SCREENS) { connectors.classList.add('visible'); } else { connectors.classList.remove('visible'); }
+    if (s >= LEVEL_DETAIL) { layerDetail.classList.add('visible'); } else { layerDetail.classList.remove('visible'); }
+  }
+
+  // ── Pan ──
+  viewport.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    state.dragging = true;
+    state.dragStart = { x: e.clientX - state.x, y: e.clientY - state.y };
+    viewport.classList.add('grabbing');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!state.dragging) return;
+    state.x = e.clientX - state.dragStart.x;
+    state.y = e.clientY - state.dragStart.y;
+    applyTransform(false);
+  });
+  window.addEventListener('mouseup', () => { state.dragging = false; viewport.classList.remove('grabbing'); });
+
+  // ── Zoom (wheel) ──
+  viewport.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const delta = -e.deltaY * 0.001;
+    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, state.scale * (1 + delta)));
+    const ratio = newScale / state.scale;
+    state.x = mx - (mx - state.x) * ratio;
+    state.y = my - (my - state.y) * ratio;
+    state.scale = newScale;
+    applyTransform(false);
+  }, { passive: false });
+
+  // ── Touch ──
+  viewport.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      state.pinchDist = Math.hypot(dx, dy);
+    } else if (e.touches.length === 1) {
+      state.dragging = true;
+      state.dragStart = { x: e.touches[0].clientX - state.x, y: e.touches[0].clientY - state.y };
+    }
+  });
+  viewport.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2 && state.pinchDist) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const rect = viewport.getBoundingClientRect();
+      const mx = cx - rect.left, my = cy - rect.top;
+      const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, state.scale * (dist / state.pinchDist)));
+      const r2 = newScale / state.scale;
+      state.x = mx - (mx - state.x) * r2;
+      state.y = my - (my - state.y) * r2;
+      state.scale = newScale;
+      state.pinchDist = dist;
+      applyTransform(false);
+    } else if (e.touches.length === 1 && state.dragging) {
+      state.x = e.touches[0].clientX - state.dragStart.x;
+      state.y = e.touches[0].clientY - state.dragStart.y;
+      applyTransform(false);
+    }
+  }, { passive: false });
+  viewport.addEventListener('touchend', () => { state.dragging = false; state.pinchDist = null; });
+
+  // ── Keyboard ──
+  document.addEventListener('keydown', e => {
+    const PAN = 80;
+    switch (e.key) {
+      case 'ArrowLeft':  state.x += PAN; applyTransform(false); e.preventDefault(); break;
+      case 'ArrowRight': state.x -= PAN; applyTransform(false); e.preventDefault(); break;
+      case 'ArrowUp':    state.y += PAN; applyTransform(false); e.preventDefault(); break;
+      case 'ArrowDown':  state.y -= PAN; applyTransform(false); e.preventDefault(); break;
+      case '+': case '=': zoomBy(1.2); e.preventDefault(); break;
+      case '-': case '_': zoomBy(0.83); e.preventDefault(); break;
+      case 'Home': fitAll(); e.preventDefault(); break;
+    }
+  });
+
+  // ── Slider ──
+  slider.addEventListener('input', () => {
+    const rect = viewport.getBoundingClientRect();
+    const cx = rect.width / 2, cy = rect.height / 2;
+    const newScale = slider.value / 100;
+    const ratio = newScale / state.scale;
+    state.x = cx - (cx - state.x) * ratio;
+    state.y = cy - (cy - state.y) * ratio;
+    state.scale = newScale;
+    applyTransform(false);
+  });
+
+  // ── Zoom helpers ──
+  function zoomBy(factor) {
+    const rect = viewport.getBoundingClientRect();
+    const cx = rect.width / 2, cy = rect.height / 2;
+    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, state.scale * factor));
+    const ratio = newScale / state.scale;
+    state.x = cx - (cx - state.x) * ratio;
+    state.y = cy - (cy - state.y) * ratio;
+    state.scale = newScale;
+    applyTransform(false);
+  }
+
+  function zoomTo(targetScale) {
+    const rect = viewport.getBoundingClientRect();
+    const cx = rect.width / 2, cy = rect.height / 2;
+    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, targetScale));
+    const ratio = newScale / state.scale;
+    state.x = cx - (cx - state.x) * ratio;
+    state.y = cy - (cy - state.y) * ratio;
+    state.scale = newScale;
+    applyTransform(true);
+  }
+
+  // ── Fit All (uses measured bounds) ──
+  function fitAll() {
+    const rect = viewport.getBoundingClientRect();
+    const old = canvas.style.transform;
+    canvas.style.transform = 'none';
+    const cw = canvas.scrollWidth || 15000;
+    const ch = canvas.scrollHeight || 2500;
+    canvas.style.transform = old;
+
+    const pad = 40;
+    const scaleX = (rect.width - pad * 2) / cw;
+    const scaleY = (rect.height - pad * 2) / ch;
+    state.scale = Math.min(scaleX, scaleY, MAX_SCALE);
+    state.x = (rect.width - cw * state.scale) / 2;
+    state.y = (rect.height - ch * state.scale) / 2;
+    applyTransform(true);
+  }
+
+  viewport.addEventListener('dblclick', e => {
+    if (e.target.closest('.detail-flow') || e.target.closest('.screen-node') || e.target.closest('.journey-block')) return;
+    fitAll();
+  });
+
+  // ── Minimap ──
+  const minimapCanvas = document.getElementById('minimap-canvas');
+  const minimapCtx = minimapCanvas.getContext('2d');
+  const minimapVP = document.getElementById('minimap-viewport');
+
+  function updateMinimap() {
+    const mmW = 200, mmH = 120;
+    const CW = 15000, CH = 2500;
+    const s = Math.min(mmW / CW, mmH / CH);
+
+    minimapCtx.clearRect(0, 0, 400, 240);
+    const stages = [
+      { x: 40, w: 2400, c: '#EBF4F5' },
+      { x: 2500, w: 2400, c: '#E8F0F5' },
+      { x: 4960, w: 2400, c: '#F4FAEB' },
+      { x: 7420, w: 4800, c: '#FCF9D9' },
+      { x: 12280, w: 2400, c: '#F7EEFF' },
+    ];
+    stages.forEach(st => {
+      minimapCtx.fillStyle = st.c;
+      minimapCtx.fillRect(st.x * s * 2, 40 * s * 2, st.w * s * 2, 1800 * s * 2);
+    });
+
+    const vpRect = viewport.getBoundingClientRect();
+    const vx = (-state.x / state.scale) * s;
+    const vy = (-state.y / state.scale) * s;
+    const vw = (vpRect.width / state.scale) * s;
+    const vh = (vpRect.height / state.scale) * s;
+    minimapVP.style.left = Math.max(0, vx) + 'px';
+    minimapVP.style.top = Math.max(0, vy) + 'px';
+    minimapVP.style.width = Math.min(vw, mmW) + 'px';
+    minimapVP.style.height = Math.min(vh, mmH) + 'px';
+  }
+
+  document.getElementById('minimap').addEventListener('click', e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const CW = 15000, CH = 2500;
+    const s = Math.min(200 / CW, 120 / CH);
+    const canvasX = mx / s, canvasY = my / s;
+    const vpRect = viewport.getBoundingClientRect();
+    state.x = -(canvasX * state.scale) + vpRect.width / 2;
+    state.y = -(canvasY * state.scale) + vpRect.height / 2;
+    applyTransform(true);
+  });
+
+  // ── Init ──
+  window.addEventListener('load', () => {
+    setTimeout(fitAll, 800);
+  });
+</script>
+</body>
+</html>

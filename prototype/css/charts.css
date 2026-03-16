@@ -1,0 +1,202 @@
+/* ============================================================
+   Charts — Gauge, Donut, Sparkline, Heatmap Styles
+   ============================================================ */
+
+/* Gauge */
+.gauge-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -40%);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--sds-text-primary);
+  line-height: 1;
+}
+
+.gauge-sublabel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 60%);
+  font-size: 12px;
+  color: var(--sds-text-secondary);
+  white-space: nowrap;
+}
+
+/* Donut */
+.donut-container {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.donut-chart {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.donut-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.donut-center-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--sds-text-primary);
+  line-height: 1.2;
+}
+
+.donut-center-label {
+  font-size: 11px;
+  color: var(--sds-text-secondary);
+}
+
+.donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.donut-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--sds-nav-text-primary);
+}
+
+.donut-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.donut-legend-value {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sparkline */
+.sparkline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke: var(--sds-interactive-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Heatmap */
+.heatmap-grid {
+  display: grid;
+  gap: 2px;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: var(--sds-text-on-primary);
+}
+
+.heatmap-cell--low    { background: var(--sds-status-success-bg); color: var(--sds-status-success-text); }
+.heatmap-cell--medium { background: var(--sds-status-warning-bg); color: var(--sds-status-warning-text); }
+.heatmap-cell--high   { background: var(--sds-status-error-bg); color: var(--sds-status-error-text); }
+.heatmap-cell--none   { background: var(--sds-bg-subtle); color: var(--sds-text-tertiary); }
+
+/* Heatmap labels */
+.heatmap-row-label {
+  font-size: 12px;
+  color: var(--sds-text-secondary);
+  padding-right: 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.heatmap-col-label {
+  font-size: 11px;
+  color: var(--sds-text-tertiary);
+  text-align: center;
+  padding-bottom: 4px;
+}
+
+/* Bar chart */
+.bar-chart-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.bar-chart-label {
+  font-size: 12px;
+  color: var(--sds-text-secondary);
+  width: 80px;
+  text-align: right;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-chart-track {
+  flex: 1;
+  height: 20px;
+  background: var(--sds-bg-subtle);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-chart-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.bar-chart-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sds-text-primary);
+  width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Progress Ring */
+.progress-ring-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-ring-label {
+  position: absolute;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sds-text-primary);
+}

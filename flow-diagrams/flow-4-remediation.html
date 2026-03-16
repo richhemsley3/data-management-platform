@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flow 4: Remediation — Interactive Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #FAF8F5;
+      color: #1C1A17;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    #header {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 48px;
+      background: #FFFFFF;
+      border-bottom: 1px solid #E0DCD3;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+      z-index: 100;
+      font-family: Inter, sans-serif;
+    }
+    #header .title {
+      font-size: 15px; font-weight: 600; color: #1C1A17;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    #header .controls {
+      display: flex; gap: 4px;
+    }
+    #header .controls button {
+      width: 32px; height: 32px; border: 1px solid #E0DCD3;
+      background: #FFFFFF; border-radius: 6px; cursor: pointer;
+      font-size: 16px; color: #333; display: flex; align-items: center; justify-content: center;
+    }
+    #header .controls button:hover { background: #F5F3F0; }
+    #flow-svg { display: block; }
+    .node { cursor: pointer; }
+    .node:hover rect, .node:hover circle { filter: brightness(0.97); }
+    .node:hover { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.1)); }
+
+    /* Sidebar */
+    #sidebar {
+      position: fixed; top: 48px; right: -380px; bottom: 0; width: 380px;
+      background: #FFFFFF; border-left: 1px solid #E0DCD3;
+      z-index: 90; transition: right 0.3s ease;
+      overflow-y: auto; padding: 32px 24px;
+      font-family: Inter, sans-serif;
+    }
+    #sidebar.open { right: 0; }
+    #sidebar .close-btn {
+      position: absolute; top: 16px; right: 16px; width: 28px; height: 28px;
+      border: none; background: none; cursor: pointer; font-size: 20px; color: #999;
+    }
+    #sidebar .close-btn:hover { color: #333; }
+    #sidebar .node-type-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 12px;
+    }
+    #sidebar h2 { font-size: 20px; font-weight: 600; color: #1C1A17; margin-bottom: 20px; }
+    #sidebar .section { margin-bottom: 20px; }
+    #sidebar .section-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.5px; color: #999; margin-bottom: 6px;
+    }
+    #sidebar .section-content { font-size: 14px; color: #333; line-height: 1.6; }
+    #sidebar .exit-list { list-style: none; padding: 0; }
+    #sidebar .exit-list li {
+      padding: 6px 0; border-bottom: 1px solid #F0EDE8;
+      font-size: 13px; color: #333;
+    }
+    #sidebar .exit-list li strong { color: #013D5B; }
+
+    /* Edge label pills */
+    .edge-label-bg { fill: #FFFFFF; rx: 4; opacity: 0.95; }
+    .edge-label-text { font-size: 12px; fill: #666666; font-family: Inter, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <div class="title" id="flow-title"></div>
+    <div class="controls">
+      <button onclick="zoomIn()" title="Zoom in">+</button>
+      <button onclick="zoomOut()" title="Zoom out">−</button>
+      <button onclick="fitAll()" title="Fit all">⊡</button>
+    </div>
+  </div>
+  <svg id="flow-svg"></svg>
+  <div id="sidebar">
+    <button class="close-btn" onclick="closeSidebar()">✕</button>
+    <div id="sidebar-content"></div>
+  </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  FLOW DATA — MODIFY THIS SECTION ONLY
+//  Change nodes[] and edges[] to match the user's flow.
+//  Everything below this section renders automatically.
+// ═══════════════════════════════════════════════════════════════
+const flowData = {
+  title: "Flow 4: Remediation",
+  nodes: [
+    // Entry
+    { id: "start", type: "start", label: "Context Loaded", description: "Entry from Risk Detail, Table Detail, Dashboard, or Review Queue. Pre-selected items and recommended remediation action are loaded into context.", edgeCases: ["No items pre-selected — user must select manually", "Recommended action may not be available for all data types"] },
+
+    // Step 1: Configure
+    { id: "configure", type: "process", label: "Configure Remediation", description: "Step 1: User configures the remediation action. Selects scope, target data, and remediation parameters. Pre-populated with recommended action from entry context.", userAction: "Review pre-selected items, adjust scope, configure remediation parameters." },
+
+    // Schedule decision
+    { id: "schedule_decision", type: "user-decision", label: "Schedule?", description: "User decides whether to execute remediation immediately or schedule it for a later time." },
+    { id: "schedule_later", type: "alt-flow", label: "Select Date/Time", description: "User picks a specific date/time or selects a pre-defined maintenance window for scheduled execution.", userAction: "Choose date/time from calendar picker or select a maintenance window from the list." },
+
+    // Action type decision
+    { id: "action_type", type: "user-decision", label: "Action Type?", description: "User selects the type of remediation action to apply." },
+    { id: "tokenize", type: "process", label: "Tokenize", description: "Apply tokenization to sensitive columns. User selects a tokenization policy and maps source columns to tokenized outputs.", userAction: "Select tokenization policy, map columns to tokenize.", edgeCases: ["Column already tokenized", "Policy incompatible with data type"] },
+    { id: "revoke_access", type: "process", label: "Revoke Access", description: "Remove access grants from users or roles. User selects which grants to revoke from the affected data.", userAction: "Select grants to revoke from the list of current permissions.", edgeCases: ["Grant is inherited from a parent role", "User has active sessions using the grant"] },
+    { id: "delete_data", type: "process", label: "Delete Data", description: "Permanently delete sensitive data columns. User confirms columns and reviews the dependency tree to understand downstream impact.", userAction: "Confirm columns for deletion, review dependency tree.", edgeCases: ["Column has downstream dependencies", "Data is referenced by active reports or pipelines"] },
+    { id: "apply_policy", type: "process", label: "Apply Policy", description: "Apply a data governance policy to the selected data. User selects a policy and previews which records match the policy criteria.", userAction: "Select policy, review matching records.", edgeCases: ["Policy conflicts with existing policy on same data", "No records match the policy criteria"] },
+
+    // Step 2: Preview Impact
+    { id: "preview_impact", type: "process", label: "Preview Impact", description: "Step 2: Before/after comparison showing the projected effect of the remediation. Displays current vs projected risk scores, affected records count, and downstream impact.", userAction: "Review impact preview, compare current vs projected risk scores." },
+
+    // Dry run decision
+    { id: "dry_run_decision", type: "user-decision", label: "Dry Run?", description: "User decides whether to perform a dry run before executing the actual remediation." },
+    { id: "execute_dry_run", type: "alt-flow", label: "Execute Dry Run", description: "System simulates the remediation without making actual changes. Produces a detailed report of what would happen.", edgeCases: ["Dry run times out on very large datasets"] },
+    { id: "dry_run_results", type: "process", label: "Dry Run Results", description: "Results of the dry run simulation. Shows what changes would be applied, records affected, and any warnings or conflicts detected." },
+    { id: "proceed_decision", type: "user-decision", label: "Proceed?", description: "After reviewing dry run results, user decides whether to proceed with the actual execution." },
+
+    // Approval decision
+    { id: "approval_decision", type: "decision", label: "Approval Required?", description: "System checks whether the remediation action requires approval based on organizational policies, scope, and data sensitivity." },
+    { id: "submit_approval", type: "process", label: "Submit Approval Request", description: "Remediation request is submitted to the designated approver(s). Includes full context: action type, scope, impact preview, and dry run results if available.", userAction: "Submit the request and optionally add a note for the approver." },
+    { id: "approval_pending", type: "alt-flow", label: "Approval Pending", description: "Waiting for approver to review and act on the request. User can track status from the dashboard or remediation history." },
+
+    // Approval sub-flow
+    { id: "approver_action", type: "user-decision", label: "Approver Action?", description: "The designated approver reviews the remediation request and takes action." },
+    { id: "approval_review", type: "process", label: "Approval Review", description: "Approver reviews the full remediation details: action type, scope, affected data, impact preview, dry run results, and submitter's notes.", userAction: "Approver reviews all details of the remediation request." },
+    { id: "approval_verdict", type: "user-decision", label: "Decision?", description: "Approver makes a decision on the remediation request." },
+    { id: "rejected", type: "error", label: "Rejected", description: "Approver rejects the remediation request with a reason. The submitter is notified and can revise and resubmit.", edgeCases: ["Submitter disagrees with rejection reason"] },
+    { id: "request_changes", type: "alt-flow", label: "Request Changes", description: "Approver requests modifications to the remediation configuration before approval. Submitter is sent back to the Configure step with the approver's feedback." },
+    { id: "auto_escalated", type: "alt-flow", label: "Auto-Escalated", description: "Approval request expired without action. System automatically escalates to the next approver in the chain or to an admin.", edgeCases: ["No escalation target configured", "All approvers in chain have expired"] },
+
+    // Step 3: Execute
+    { id: "execute", type: "process", label: "Execute Remediation", description: "Step 3: The remediation action is executed against the target data." },
+    { id: "scope_decision", type: "decision", label: "Scope?", description: "System determines execution mode based on the number of affected records." },
+    { id: "inline_execution", type: "process", label: "Inline Execution", description: "Small batch (fewer than 50 records). Executes synchronously with inline progress indicator. User waits on the current screen.", edgeCases: ["Execution takes longer than expected for small batch"] },
+    { id: "background_execution", type: "process", label: "Background Execution", description: "Large batch (50+ records). Executes asynchronously in the background. User sees a progress bar and can navigate away.", userAction: "Monitor progress or navigate away. Notification sent on completion.", edgeCases: ["Background job interrupted", "System resource limits reached"] },
+
+    // Results
+    { id: "result_decision", type: "decision", label: "Result?", description: "System evaluates the outcome of the remediation execution." },
+    { id: "success", type: "confirmation", label: "Success", description: "All records remediated successfully. Animated risk score reduction shows the before/after improvement. Summary of changes applied.", userAction: "Review success summary and updated risk score." },
+    { id: "partial_failure", type: "error", label: "Partial Success", description: "Some records failed to remediate. Shows which records succeeded and which failed, with error details. Option to retry failed records.", userAction: "Review failures, retry failed records or investigate errors.", edgeCases: ["Retry also fails", "Failed records have been modified since initial attempt"] },
+    { id: "complete_failure", type: "error", label: "Complete Failure", description: "All records failed to remediate. Displays error details and diagnostic information. No changes were applied.", edgeCases: ["Transient infrastructure error", "Permissions revoked mid-execution"] },
+
+    // Post-success
+    { id: "next_action", type: "user-decision", label: "Next Action?", description: "After successful remediation, user chooses their next step." },
+    { id: "return_dashboard", type: "end", label: "Return to Dashboard", description: "User returns to the main dashboard with updated risk scores reflecting the completed remediation." },
+    { id: "remediate_more", type: "end", label: "Remediate More", description: "User initiates another remediation flow for additional items. Returns to the Configure step with a fresh context." },
+    { id: "view_history", type: "process", label: "Remediation History", description: "User navigates to the remediation history log showing all past remediation actions, their status, and outcomes.", userAction: "Browse and filter past remediations." },
+
+    // History detail and rollback
+    { id: "history_detail", type: "process", label: "Remediation Detail", description: "Detailed view of a single past remediation entry. Shows action taken, scope, timestamp, executor, and current status.", userAction: "Click an entry in the history list to view details." },
+    { id: "rollback_decision", type: "decision", label: "Rollback Available?", description: "System checks whether the selected remediation action is reversible." },
+    { id: "rollback_preview", type: "process", label: "Rollback Preview", description: "Preview of what the rollback will restore. Shows the data that will revert and the projected risk score change.", userAction: "Review rollback impact before confirming." },
+    { id: "rollback_confirm", type: "process", label: "Confirm Rollback", description: "User confirms the rollback action.", userAction: "Click confirm to execute the rollback." },
+    { id: "rollback_executed", type: "confirmation", label: "Rollback Executed", description: "Rollback completed successfully. Data has been restored to its pre-remediation state. Risk scores updated accordingly." },
+    { id: "not_reversible", type: "error", label: "Not Reversible", description: "This remediation action cannot be rolled back. Destructive actions such as data deletion are permanent.", edgeCases: ["User expected rollback to be available"] },
+
+    // Notes
+    { id: "note_personas", type: "note", label: "Personas: Priya (governance), Jordan (technical)" },
+    { id: "note_stage", type: "note", label: "Stage: Remediate. Goal: reduce risk exposure." }
+  ],
+  edges: [
+    // Entry to configure
+    { from: "start", to: "configure", isHappyPath: true },
+
+    // Configure to schedule decision
+    { from: "configure", to: "schedule_decision", isHappyPath: true },
+    { from: "schedule_decision", to: "action_type", label: "Now", isHappyPath: true },
+    { from: "schedule_decision", to: "schedule_later", label: "Later" },
+    { from: "schedule_later", to: "action_type" },
+
+    // Action type branches
+    { from: "action_type", to: "tokenize", label: "Tokenize", isHappyPath: true },
+    { from: "action_type", to: "revoke_access", label: "Revoke" },
+    { from: "action_type", to: "delete_data", label: "Delete" },
+    { from: "action_type", to: "apply_policy", label: "Policy" },
+
+    // All actions converge to preview
+    { from: "tokenize", to: "preview_impact", isHappyPath: true },
+    { from: "revoke_access", to: "preview_impact" },
+    { from: "delete_data", to: "preview_impact" },
+    { from: "apply_policy", to: "preview_impact" },
+
+    // Preview to dry run decision
+    { from: "preview_impact", to: "dry_run_decision", isHappyPath: true },
+    { from: "dry_run_decision", to: "approval_decision", label: "No", isHappyPath: true },
+    { from: "dry_run_decision", to: "execute_dry_run", label: "Yes" },
+    { from: "execute_dry_run", to: "dry_run_results" },
+    { from: "dry_run_results", to: "proceed_decision" },
+    { from: "proceed_decision", to: "approval_decision", label: "Yes", isHappyPath: true },
+    { from: "proceed_decision", to: "configure", label: "No", isError: true },
+
+    // Approval decision
+    { from: "approval_decision", to: "execute", label: "No", isHappyPath: true },
+    { from: "approval_decision", to: "submit_approval", label: "Yes" },
+    { from: "submit_approval", to: "approval_pending" },
+
+    // Approval sub-flow
+    { from: "approval_pending", to: "approver_action" },
+    { from: "approver_action", to: "approval_review", label: "Review" },
+    { from: "approver_action", to: "auto_escalated", label: "Expired" },
+    { from: "auto_escalated", to: "approver_action", label: "Re-assign" },
+    { from: "approval_review", to: "approval_verdict" },
+    { from: "approval_verdict", to: "execute", label: "Approve", isHappyPath: true },
+    { from: "approval_verdict", to: "rejected", label: "Reject", isError: true },
+    { from: "approval_verdict", to: "request_changes", label: "Changes" },
+    { from: "request_changes", to: "configure", label: "Revise" },
+
+    // Execute
+    { from: "execute", to: "scope_decision", isHappyPath: true },
+    { from: "scope_decision", to: "inline_execution", label: "< 50", isHappyPath: true },
+    { from: "scope_decision", to: "background_execution", label: "50+" },
+    { from: "inline_execution", to: "result_decision", isHappyPath: true },
+    { from: "background_execution", to: "result_decision" },
+
+    // Results
+    { from: "result_decision", to: "success", label: "All OK", isHappyPath: true },
+    { from: "result_decision", to: "partial_failure", label: "Partial", isError: true },
+    { from: "result_decision", to: "complete_failure", label: "Failed", isError: true },
+    { from: "partial_failure", to: "execute", label: "Retry failed" },
+
+    // Post-success
+    { from: "success", to: "next_action", isHappyPath: true },
+    { from: "next_action", to: "return_dashboard", label: "Dashboard", isHappyPath: true },
+    { from: "next_action", to: "remediate_more", label: "More" },
+    { from: "next_action", to: "view_history", label: "History" },
+
+    // History and rollback
+    { from: "view_history", to: "history_detail" },
+    { from: "history_detail", to: "rollback_decision" },
+    { from: "rollback_decision", to: "rollback_preview", label: "Yes" },
+    { from: "rollback_decision", to: "not_reversible", label: "No", isError: true },
+    { from: "rollback_preview", to: "rollback_confirm" },
+    { from: "rollback_confirm", to: "rollback_executed", isHappyPath: true }
+  ]
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  DO NOT MODIFY BELOW THIS LINE
+//  Rendering engine — handles layout, drawing, interactions.
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Node style definitions ───
+const NODE_STYLES = {
+  'start':         { fill: '#40454A', stroke: '#B8BCC0', textColor: '#FFFFFF' },
+  'end':           { fill: '#FCF5B1', stroke: '#B29B24', textColor: '#333333' },
+  'process':       { fill: '#C1DDE3', stroke: '#77B2C7', textColor: '#333333' },
+  'decision':      { fill: '#E6E6E6', stroke: '#B8B8B8', textColor: '#333333' },
+  'user-decision': { fill: '#FFFFFF', stroke: '#B8B8B8', textColor: '#333333' },
+  'error':         { fill: '#EEA79E', stroke: '#DB7060', textColor: '#333333' },
+  'confirmation':  { fill: '#E2EDCC', stroke: '#7A9A01', textColor: '#333333' },
+  'alt-flow':      { fill: '#C39DE3', stroke: '#805AA1', textColor: '#333333' },
+  'note':          { fill: '#FFD966', stroke: 'none',    textColor: '#333333' }
+};
+
+function getStyle(type) { return NODE_STYLES[type] || NODE_STYLES['process']; }
+
+// ─── Node dimensions (from Figma reference) ───
+const NODE_W = 272, NODE_H = 106, PILL_RX = 53, RECT_RX = 6;
+const DIAMOND_SIZE = 85; // half-side length before rotation — gives ~120px visual diagonal
+const CIRCLE_R = 50;
+const NOTE_SIZE = 140;
+
+function getNodeWidth(node) {
+  if (node.type === 'decision') return DIAMOND_SIZE * 2 * 1.414; // rotated diagonal
+  if (node.type === 'user-decision') return CIRCLE_R * 2;
+  if (node.type === 'note') return NOTE_SIZE;
+  return NODE_W;
+}
+function getNodeHeight(node) {
+  if (node.type === 'decision') return DIAMOND_SIZE * 2 * 1.414; // rotated diagonal
+  if (node.type === 'user-decision') return CIRCLE_R * 2;
+  if (node.type === 'note') return NOTE_SIZE;
+  return NODE_H;
+}
+
+// ─── Layout algorithm ───
+const COL_GAP = 160, ROW_GAP = 160;
+const COL_W = NODE_W + COL_GAP; // 432
+const ROW_H = NODE_H + ROW_GAP; // 266
+
+function layoutNodes(nodes, edges) {
+  // Build adjacency from edges
+  const adj = {};
+  const inDegree = {};
+  nodes.forEach(n => { adj[n.id] = []; inDegree[n.id] = 0; });
+  edges.forEach(e => {
+    adj[e.from] = adj[e.from] || [];
+    adj[e.from].push(e);
+    inDegree[e.to] = (inDegree[e.to] || 0) + 1;
+  });
+
+  // Find start node
+  let startNode = nodes.find(n => n.type === 'start');
+  if (!startNode) startNode = nodes.find(n => inDegree[n.id] === 0) || nodes[0];
+
+  // BFS to assign columns and rows
+  const visited = new Set();
+  const queue = [{ id: startNode.id, col: 0, row: 0 }];
+  const positions = {};
+  const colUsed = {}; // track which rows are used per column
+
+  while (queue.length > 0) {
+    const { id, col, row } = queue.shift();
+    if (visited.has(id)) continue;
+    visited.add(id);
+    positions[id] = { col, row };
+
+    // Track column usage
+    if (!colUsed[col]) colUsed[col] = new Set();
+    colUsed[col].add(row);
+
+    const outEdges = adj[id] || [];
+    // Sort: happy path first, then normal, then error
+    const sorted = [...outEdges].sort((a, b) => {
+      if (a.isHappyPath && !b.isHappyPath) return -1;
+      if (!a.isHappyPath && b.isHappyPath) return 1;
+      if (a.isError && !b.isError) return 1;
+      if (!a.isError && b.isError) return -1;
+      return 0;
+    });
+
+    let branchOffset = 1;
+    sorted.forEach((edge, i) => {
+      if (visited.has(edge.to)) return;
+      if (i === 0 && (edge.isHappyPath || sorted.length === 1)) {
+        // Happy path or only path — same row, next column
+        queue.push({ id: edge.to, col: col + 1, row: row });
+      } else {
+        // Branch — offset row. Errors go down, alt goes up.
+        const dir = edge.isError ? 1 : (edge.isAltFlow ? -1 : branchOffset);
+        queue.push({ id: edge.to, col: col + 1, row: row + dir });
+        branchOffset++;
+      }
+    });
+  }
+
+  // Handle unvisited nodes (disconnected)
+  let maxCol = 0;
+  Object.values(positions).forEach(p => { if (p.col > maxCol) maxCol = p.col; });
+  nodes.forEach(n => {
+    if (!visited.has(n.id)) {
+      maxCol++;
+      positions[n.id] = { col: maxCol, row: 0 };
+    }
+  });
+
+  // Convert grid positions to pixel coordinates
+  const START_X = 200;
+  const CENTER_Y = 400;
+  nodes.forEach(n => {
+    const pos = positions[n.id];
+    n.col = pos.col;
+    n.row = pos.row;
+    n.x = START_X + pos.col * COL_W;
+    n.y = CENTER_Y + pos.row * ROW_H;
+  });
+}
+
+// ─── Edge center for connector attachment ───
+function getEdgePoint(node, side) {
+  const w = getNodeWidth(node);
+  const h = getNodeHeight(node);
+  switch (side) {
+    case 'right':  return { x: node.x + w / 2, y: node.y };
+    case 'left':   return { x: node.x - w / 2, y: node.y };
+    case 'bottom': return { x: node.x, y: node.y + h / 2 };
+    case 'top':    return { x: node.x, y: node.y - h / 2 };
+  }
+}
+
+// ─── Build orthogonal path ───
+function buildPath(srcNode, tgtNode) {
+  const sameRow = Math.abs(srcNode.y - tgtNode.y) < 10;
+  const goingRight = tgtNode.x > srcNode.x;
+
+  if (sameRow && goingRight) {
+    // Straight horizontal line
+    const src = getEdgePoint(srcNode, 'right');
+    const tgt = getEdgePoint(tgtNode, 'left');
+    return `M${src.x},${src.y} L${tgt.x},${tgt.y}`;
+  }
+
+  if (goingRight) {
+    // Different row, going right — exit right, bend, enter left
+    const src = getEdgePoint(srcNode, 'right');
+    const tgt = getEdgePoint(tgtNode, 'left');
+    const midX = src.x + COL_GAP * 0.4;
+    return `M${src.x},${src.y} H${midX} V${tgt.y} H${tgt.x}`;
+  }
+
+  // Going LEFT (loop back) — route cleanly around the bottom
+  const src = getEdgePoint(srcNode, 'bottom');
+  const tgt = getEdgePoint(tgtNode, 'bottom');
+  const loopY = Math.max(src.y, tgt.y) + ROW_GAP * 0.6;
+  return `M${src.x},${src.y} V${loopY} H${tgt.x} V${tgt.y}`;
+}
+
+// ─── Rendering ───
+const width = window.innerWidth;
+const height = window.innerHeight - 48;
+
+document.getElementById('flow-title').textContent = flowData.title;
+
+const svg = d3.select('#flow-svg')
+  .attr('width', width)
+  .attr('height', height)
+  .style('background', '#FAF8F5')
+  .style('margin-top', '48px');
+
+const defs = svg.append('defs');
+
+// Arrowhead markers
+function addMarker(id, color) {
+  defs.append('marker')
+    .attr('id', id)
+    .attr('viewBox', '0 0 10 7')
+    .attr('refX', 10).attr('refY', 3.5)
+    .attr('markerWidth', 10).attr('markerHeight', 7)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,0 L10,3.5 L0,7 Z')
+    .attr('fill', color);
+}
+addMarker('arrow-default', '#B8B8B8');
+addMarker('arrow-happy', '#7A9A01');
+addMarker('arrow-error', '#CF6253');
+
+const container = svg.append('g').attr('class', 'canvas-container');
+
+// Zoom
+const zoomBehavior = d3.zoom()
+  .scaleExtent([0.15, 3])
+  .on('zoom', (event) => container.attr('transform', event.transform));
+svg.call(zoomBehavior);
+
+// Zoom controls
+window.zoomIn = () => svg.transition().duration(300).call(zoomBehavior.scaleBy, 1.3);
+window.zoomOut = () => svg.transition().duration(300).call(zoomBehavior.scaleBy, 0.75);
+window.fitAll = () => fitToContent();
+
+// ─── Layout ───
+layoutNodes(flowData.nodes, flowData.edges);
+
+// Build node lookup
+const nodeMap = {};
+flowData.nodes.forEach(n => nodeMap[n.id] = n);
+
+// ─── Draw edges ───
+const edgesGroup = container.append('g').attr('class', 'edges');
+
+flowData.edges.forEach(edge => {
+  const src = nodeMap[edge.from];
+  const tgt = nodeMap[edge.to];
+  if (!src || !tgt) return;
+
+  const isHappy = edge.isHappyPath;
+  const isErr = edge.isError;
+  const color = isHappy ? '#7A9A01' : (isErr ? '#CF6253' : '#B8B8B8');
+  const strokeW = isHappy ? 2.5 : 2;
+  const marker = isHappy ? 'url(#arrow-happy)' : (isErr ? 'url(#arrow-error)' : 'url(#arrow-default)');
+  const dashArray = isErr ? '6,4' : 'none';
+
+  const path = buildPath(src, tgt);
+
+  edgesGroup.append('path')
+    .attr('d', path)
+    .attr('fill', 'none')
+    .attr('stroke', color)
+    .attr('stroke-width', strokeW)
+    .attr('stroke-dasharray', dashArray)
+    .attr('marker-end', marker);
+
+  // Edge label
+  if (edge.label) {
+    const midX = (src.x + tgt.x) / 2;
+    const midY = (src.y + tgt.y) / 2;
+    // Offset labels above horizontal lines, beside vertical segments
+    const offsetY = Math.abs(src.y - tgt.y) < 10 ? -16 : 0;
+    const offsetX = Math.abs(src.y - tgt.y) < 10 ? 0 : 14;
+
+    const labelG = edgesGroup.append('g')
+      .attr('transform', `translate(${midX + offsetX}, ${midY + offsetY})`);
+
+    labelG.append('rect')
+      .attr('class', 'edge-label-bg')
+      .attr('x', -24).attr('y', -12)
+      .attr('width', 48).attr('height', 24)
+      .attr('rx', 12)
+      .attr('fill', '#FFFFFF')
+      .attr('stroke', '#E0DCD3')
+      .attr('stroke-width', 1);
+
+    labelG.append('text')
+      .attr('class', 'edge-label-text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('font-size', '13px')
+      .attr('font-weight', '500')
+      .attr('fill', '#555555')
+      .text(edge.label);
+
+    // Auto-size background to text
+    const textNode = labelG.select('text').node();
+    if (textNode) {
+      const bbox = textNode.getBBox();
+      labelG.select('rect')
+        .attr('x', bbox.x - 10)
+        .attr('y', bbox.y - 5)
+        .attr('width', bbox.width + 20)
+        .attr('height', bbox.height + 10);
+    }
+  }
+});
+
+// ─── Draw nodes ───
+const nodesGroup = container.append('g').attr('class', 'nodes');
+
+flowData.nodes.forEach(node => {
+  const style = getStyle(node.type);
+  const g = nodesGroup.append('g')
+    .attr('class', `node node-${node.type}`)
+    .attr('transform', `translate(${node.x}, ${node.y})`)
+    .style('cursor', 'pointer')
+    .on('click', () => showSidebar(node));
+
+  if (node.type === 'decision') {
+    // Diamond — rotated rect. DIAMOND_SIZE = half side length
+    g.append('rect')
+      .attr('x', -DIAMOND_SIZE).attr('y', -DIAMOND_SIZE)
+      .attr('width', DIAMOND_SIZE * 2).attr('height', DIAMOND_SIZE * 2)
+      .attr('rx', 6)
+      .attr('fill', style.fill)
+      .attr('stroke', style.stroke)
+      .attr('stroke-width', 4)
+      .attr('transform', 'rotate(45)');
+    // Text NOT rotated — wrap if needed
+    const words = node.label.split(/\s+/);
+    if (words.length <= 2) {
+      g.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('fill', style.textColor)
+        .attr('font-size', '16px')
+        .attr('font-weight', '500')
+        .text(node.label);
+    } else {
+      // Multi-line for longer labels
+      const mid = Math.ceil(words.length / 2);
+      g.append('text').attr('text-anchor', 'middle').attr('dy', '-0.3em')
+        .attr('fill', style.textColor).attr('font-size', '15px').attr('font-weight', '500')
+        .text(words.slice(0, mid).join(' '));
+      g.append('text').attr('text-anchor', 'middle').attr('dy', '1.1em')
+        .attr('fill', style.textColor).attr('font-size', '15px').attr('font-weight', '500')
+        .text(words.slice(mid).join(' '));
+    }
+
+  } else if (node.type === 'user-decision') {
+    // Circle
+    g.append('circle')
+      .attr('r', CIRCLE_R)
+      .attr('fill', style.fill)
+      .attr('stroke', style.stroke)
+      .attr('stroke-width', 4);
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('fill', style.textColor)
+      .attr('font-size', '16px')
+      .attr('font-weight', '500')
+      .text(node.label);
+
+  } else if (node.type === 'start' || node.type === 'end') {
+    // Stadium pill
+    g.append('rect')
+      .attr('x', -NODE_W / 2).attr('y', -NODE_H / 2)
+      .attr('width', NODE_W).attr('height', NODE_H)
+      .attr('rx', PILL_RX)
+      .attr('fill', style.fill)
+      .attr('stroke', style.stroke)
+      .attr('stroke-width', 4);
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('fill', style.textColor)
+      .attr('font-size', '20px')
+      .attr('font-weight', '600')
+      .text(node.label);
+
+  } else if (node.type === 'note') {
+    // Yellow sticky note
+    g.append('rect')
+      .attr('x', -NOTE_SIZE / 2).attr('y', -NOTE_SIZE / 2)
+      .attr('width', NOTE_SIZE).attr('height', NOTE_SIZE)
+      .attr('fill', style.fill);
+    g.append('text')
+      .attr('x', -NOTE_SIZE / 2 + 12).attr('y', -NOTE_SIZE / 2 + 20)
+      .attr('fill', style.textColor)
+      .attr('font-size', '11px')
+      .attr('font-weight', '600')
+      .text('NOTE');
+    // Wrap body text
+    const words = (node.label || '').split(' ');
+    let line = '', lineNum = 0;
+    words.forEach(word => {
+      const test = line ? line + ' ' + word : word;
+      if (test.length > 18) {
+        g.append('text')
+          .attr('x', -NOTE_SIZE / 2 + 12)
+          .attr('y', -NOTE_SIZE / 2 + 40 + lineNum * 16)
+          .attr('fill', style.textColor)
+          .attr('font-size', '12px')
+          .text(line);
+        line = word;
+        lineNum++;
+      } else {
+        line = test;
+      }
+    });
+    if (line) {
+      g.append('text')
+        .attr('x', -NOTE_SIZE / 2 + 12)
+        .attr('y', -NOTE_SIZE / 2 + 40 + lineNum * 16)
+        .attr('fill', style.textColor)
+        .attr('font-size', '12px')
+        .text(line);
+    }
+
+  } else {
+    // Default rectangle: process, error, confirmation, alt-flow
+    g.append('rect')
+      .attr('x', -NODE_W / 2).attr('y', -NODE_H / 2)
+      .attr('width', NODE_W).attr('height', NODE_H)
+      .attr('rx', RECT_RX)
+      .attr('fill', style.fill)
+      .attr('stroke', style.stroke)
+      .attr('stroke-width', 4);
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('fill', style.textColor)
+      .attr('font-size', '20px')
+      .attr('font-weight', '500')
+      .text(node.label);
+  }
+
+  // Hover effect
+  g.on('mouseenter', function() {
+    d3.select(this).select('rect, circle').transition().duration(150)
+      .attr('stroke-width', 5);
+  }).on('mouseleave', function() {
+    d3.select(this).select('rect, circle').transition().duration(150)
+      .attr('stroke-width', 4);
+  });
+});
+
+// ─── Sidebar ───
+const sidebar = document.getElementById('sidebar');
+const sidebarContent = document.getElementById('sidebar-content');
+
+function showSidebar(node) {
+  const style = getStyle(node.type);
+  const typeName = node.type.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  let html = `<div class="node-type-badge" style="background:${style.fill};color:${style.textColor};border:1px solid ${style.stroke}">${typeName}</div>`;
+  html += `<h2>${node.label}</h2>`;
+
+  if (node.description) {
+    html += `<div class="section"><div class="section-label">Description</div><div class="section-content">${node.description}</div></div>`;
+  }
+  if (node.userAction) {
+    html += `<div class="section"><div class="section-label">User Action</div><div class="section-content">${node.userAction}</div></div>`;
+  }
+  if (node.edgeCases && node.edgeCases.length) {
+    html += `<div class="section"><div class="section-label">Edge Cases</div><ul class="exit-list">${node.edgeCases.map(e => `<li>${e}</li>`).join('')}</ul></div>`;
+  }
+
+  // Show exits
+  const exits = flowData.edges.filter(e => e.from === node.id);
+  if (exits.length) {
+    html += `<div class="section"><div class="section-label">Exits</div><ul class="exit-list">`;
+    exits.forEach(e => {
+      const tgt = nodeMap[e.to];
+      html += `<li>${e.label ? `<strong>${e.label}</strong> → ` : '→ '}${tgt ? tgt.label : e.to}</li>`;
+    });
+    html += `</ul></div>`;
+  }
+
+  sidebarContent.innerHTML = html;
+  sidebar.classList.add('open');
+}
+
+window.closeSidebar = () => sidebar.classList.remove('open');
+
+// Click empty canvas to close sidebar
+svg.on('click', (event) => {
+  if (event.target === svg.node()) closeSidebar();
+});
+
+// ─── Fit to content on load ───
+function fitToContent() {
+  const bounds = container.node().getBBox();
+  if (bounds.width === 0 || bounds.height === 0) return;
+  const pad = 100;
+  const bw = bounds.width + pad * 2;
+  const bh = bounds.height + pad * 2;
+  const scale = Math.min(width / bw, height / bh, 1.2);
+  const tx = (width - bounds.width * scale) / 2 - bounds.x * scale;
+  const ty = (height - bounds.height * scale) / 2 - bounds.y * scale;
+  svg.transition().duration(600)
+    .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+}
+
+// Initial fit after a small delay to let fonts load
+setTimeout(fitToContent, 100);
+
+</script>
+</body>
+</html>

@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Data Source Connections — Screen Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #FAF8F5;
+      color: #1C1A17;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    #title-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 56px;
+      background: #FFFFFF;
+      border-bottom: 1px solid #E0DCD3;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      gap: 16px;
+    }
+    #title-bar h1 { font-size: 20px; font-weight: 700; color: #1C1A17; white-space: nowrap; }
+    #title-bar .sep { width: 1px; height: 24px; background: #E0DCD3; }
+    #title-bar p { font-size: 13px; color: #54514D; }
+    #title-bar .controls { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    #title-bar .legend { display: flex; gap: 14px; align-items: center; font-size: 11px; color: #6B6760; margin-right: 8px; }
+    #title-bar .legend-item { display: flex; align-items: center; gap: 5px; }
+    #title-bar .legend-swatch { width: 10px; height: 10px; border-radius: 3px; }
+    #title-bar .legend-swatch.screen { background: #FFFFFF; border: 1.5px solid #013D5B; }
+    #title-bar .legend-swatch.decision { background: #FFF8E1; border: 1.5px solid #C49A00; transform: rotate(45deg); width: 9px; height: 9px; }
+    #title-bar .legend-swatch.error { background: #FFF0F0; border: 1.5px solid #C62828; }
+    #title-bar .legend-swatch.success { background: #F4FAEB; border: 1.5px solid #558B2F; }
+    #title-bar button {
+      height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid #E0DCD3;
+      background: #FFFFFF; font-size: 12px; font-weight: 500; color: #54514D; cursor: pointer;
+    }
+    #title-bar button:hover { background: #F4F1EB; }
+    #title-bar button.active { background: #013D5B; color: white; border-color: #013D5B; }
+
+    #flow-svg { position: fixed; top: 56px; left: 0; width: 100vw; height: calc(100vh - 56px); }
+
+    #detail-panel {
+      position: fixed; top: 56px; right: -420px; width: 400px;
+      height: calc(100vh - 56px); background: #FFFFFF;
+      border-left: 1px solid #E0DCD3; box-shadow: -4px 0 16px rgba(0,0,0,0.06);
+      z-index: 200; padding: 28px; overflow-y: auto; transition: right 0.25s ease;
+    }
+    #detail-panel.open { right: 0; }
+    #detail-panel .close-btn {
+      position: absolute; top: 16px; right: 16px; width: 28px; height: 28px;
+      border: 1px solid #E0DCD3; border-radius: 8px; background: #FAF8F5;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: #54514D;
+    }
+    #detail-panel .close-btn:hover { background: #EBE6DD; }
+    #detail-panel h2 { font-size: 18px; font-weight: 700; color: #1C1A17; margin-bottom: 8px; padding-right: 36px; }
+    #detail-panel .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 12px; font-weight: 500; margin-bottom: 12px;
+    }
+    #detail-panel .badge.screen { background: #D9EBED; color: #0C4A69; }
+    #detail-panel .badge.decision { background: #FFF8E1; color: #7A6200; }
+    #detail-panel .badge.error { background: #FFEAEA; color: #991B1B; }
+    #detail-panel .badge.success { background: #E8F5E9; color: #2E7D32; }
+    #detail-panel .personas { margin-bottom: 14px; }
+    #detail-panel .persona-tag {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 500; margin-right: 4px;
+    }
+    #detail-panel .persona-tag.jordan { background: #D9EBED; color: #0C4A69; }
+    #detail-panel .persona-tag.priya { background: #F3E8FF; color: #6B21A8; }
+    #detail-panel .desc { font-size: 14px; color: #54514D; line-height: 1.6; margin-bottom: 20px; }
+    #detail-panel h3 {
+      font-size: 11px; font-weight: 600; color: #6B6760; text-transform: uppercase;
+      letter-spacing: 0.5px; margin: 20px 0 8px;
+    }
+    #detail-panel ul { list-style: none; margin-bottom: 12px; }
+    #detail-panel ul li {
+      font-size: 13px; color: #1C1A17; padding: 7px 0;
+      border-bottom: 1px solid #EBE6DD; line-height: 1.4;
+    }
+    #detail-panel ul li:last-child { border-bottom: none; }
+    #detail-panel .exit-action { color: #013D5B; font-weight: 500; }
+    #detail-panel .exit-target { color: #54514D; }
+  </style>
+</head>
+<body>
+  <div id="title-bar">
+    <h1>Data Source Connections</h1>
+    <div class="sep"></div>
+    <p>Flow 1 — Connect, configure, and verify data source integrations</p>
+    <div class="controls">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch screen"></div>Screen</div>
+        <div class="legend-item"><div class="legend-swatch decision"></div>Decision</div>
+        <div class="legend-item"><div class="legend-swatch error"></div>Error</div>
+        <div class="legend-item"><div class="legend-swatch success"></div>Success</div>
+      </div>
+      <button onclick="fitToContent()">Fit View</button>
+      <button id="btn-happy" class="active" onclick="toggleLayer('happy')">Happy Path</button>
+      <button id="btn-error" class="active" onclick="toggleLayer('error')">Error Paths</button>
+    </div>
+  </div>
+  <svg id="flow-svg"></svg>
+  <div id="detail-panel">
+    <button class="close-btn" onclick="closePanel()">&#x2715;</button>
+    <h2 id="panel-name"></h2>
+    <span class="badge" id="panel-type"></span>
+    <div class="personas" id="panel-personas"></div>
+    <p class="desc" id="panel-desc"></p>
+    <h3>UI Elements</h3>
+    <ul id="panel-elements"></ul>
+    <h3>Navigation Exits</h3>
+    <ul id="panel-exits"></ul>
+  </div>
+
+<script>
+// ════════════════════════════════════════════
+//  CONSTANTS
+// ════════════════════════════════════════════
+const SW = 300;          // screen width
+const SH = 440;          // screen height
+const SIDEBAR_W = 42;    // mini sidebar inside wireframe
+const CHROME_H = 24;     // window chrome bar
+const HEADER_H = 22;     // app header bar
+const PAD = 8;           // inner content padding
+const CW = SW - SIDEBAR_W - PAD * 2; // content width
+const CX = SIDEBAR_W + PAD;          // content x offset
+const CONTENT_TOP = CHROME_H + HEADER_H + 6;
+
+const DECISION_R = 52;   // decision diamond half-size
+
+// Colors per screen type
+const COLORS = {
+  screen:   { bg:'#FFFFFF', border:'#C8C3BA', chrome:'#F4F1EB', accent:'#013D5B', sidebar:'#1C1A17' },
+  decision: { bg:'#FFFDF5', border:'#D4A800', chrome:'#FFF8E1', accent:'#7A6200', sidebar:'#7A6200' },
+  error:    { bg:'#FFFAFA', border:'#EF9A9A', chrome:'#FFEBEE', accent:'#C62828', sidebar:'#C62828' },
+  success:  { bg:'#FBFDF7', border:'#A5D6A7', chrome:'#E8F5E9', accent:'#2E7D32', sidebar:'#2E7D32' }
+};
+
+// ════════════════════════════════════════════
+//  FLOW DATA
+// ════════════════════════════════════════════
+const screens = [
+  // ── HAPPY PATH (Row 1) ──
+  {
+    id:'list', name:'Connection List', type:'screen', layer:'happy',
+    personas:['jordan','priya'],
+    desc:'Primary hub showing all data sources with health status, scan times, schema counts, and classification coverage. Supports search, platform/status filtering, bulk operations, and grouping by platform.',
+    draw(g, c) {
+      // Page header
+      label(g, c.x+2, c.y, 'Connections', 11, 700, '#1C1A17');
+      pill(g, c.x+CW-42, c.y-3, 42, 15, '+ Add', '#013D5B', '#FFF', 7);
+      c.y += 18;
+      // Health summary
+      statusDot(g, c.x+2, c.y+4, '#558B2F'); txt(g, c.x+10, c.y+7, '12 Active', 6.5, '#558B2F');
+      statusDot(g, c.x+58, c.y+4, '#C49A00'); txt(g, c.x+66, c.y+7, '2 Degraded', 6.5, '#C49A00');
+      statusDot(g, c.x+128, c.y+4, '#C62828'); txt(g, c.x+136, c.y+7, '1 Error', 6.5, '#C62828');
+      c.y += 16;
+      // Filter bar
+      roundRect(g, c.x, c.y, CW, 18, 4, '#F4F1EB', '#E0DCD3');
+      txt(g, c.x+8, c.y+12, 'Search connections...', 6.5, '#B0ABA2');
+      pill(g, c.x+CW-90, c.y+2, 38, 14, 'Platform', '#FFF', '#6B6760', 6, '#E0DCD3');
+      pill(g, c.x+CW-48, c.y+2, 36, 14, 'Status', '#FFF', '#6B6760', 6, '#E0DCD3');
+      c.y += 24;
+      // Table header
+      rect(g, c.x, c.y, CW, 16, '#F4F1EB');
+      const cols = [{t:'Name',w:0.32},{t:'Platform',w:0.2},{t:'Status',w:0.16},{t:'Last Scan',w:0.16},{t:'Schemas',w:0.16}];
+      let cx = c.x + 4;
+      cols.forEach(col => {
+        txt(g, cx, c.y+11, col.t, 6, '#6B6760', 600);
+        cx += CW * col.w;
+      });
+      c.y += 17;
+      // Table rows
+      const rows = [
+        {name:'Prod Data Warehouse',plat:'Snowflake',st:'active',scan:'2h ago',sch:'42'},
+        {name:'Analytics BQ',plat:'BigQuery',st:'active',scan:'1d ago',sch:'18'},
+        {name:'Staging DB',plat:'Snowflake',st:'warning',scan:'4h ago',sch:'12'},
+        {name:'Legacy DB',plat:'PostgreSQL',st:'error',scan:'3d ago',sch:'6'},
+        {name:'ML Pipeline',plat:'Databricks',st:'active',scan:'6h ago',sch:'24'},
+      ];
+      rows.forEach(r => {
+        rect(g, c.x, c.y, CW, 24, '#FFF', '#EBE6DD', 0.5);
+        let rx = c.x + 4;
+        txt(g, rx, c.y+10, r.name, 7, '#013D5B', 500); rx += CW*0.32;
+        txt(g, rx, c.y+10, r.plat, 6.5, '#54514D'); rx += CW*0.2;
+        const sc = {active:'#558B2F',warning:'#C49A00',error:'#C62828'}[r.st];
+        statusDot(g, rx, c.y+7, sc); txt(g, rx+7, c.y+10, r.st==='active'?'Active':r.st==='warning'?'Degraded':'Error', 6.5, sc);
+        rx += CW*0.16;
+        txt(g, rx, c.y+10, r.scan, 6.5, '#6B6760'); rx += CW*0.16;
+        txt(g, rx, c.y+10, r.sch, 6.5, '#6B6760');
+        // Second line
+        txt(g, c.x+4, c.y+19, r.plat==='Snowflake'?'snowflake-prod.us-east-1':r.plat==='BigQuery'?'project-analytics':r.plat==='PostgreSQL'?'pg-legacy.internal':'ml-cluster.databricks', 5.5, '#B0ABA2');
+        c.y += 25;
+      });
+      // Bulk action bar hint
+      c.y += 4;
+      roundRect(g, c.x, c.y, CW, 14, 3, '#EBF4F5', '#B8D4DA', 0.5);
+      txt(g, c.x+6, c.y+10, '2 selected', 6, '#013D5B', 500);
+      pill(g, c.x+CW-74, c.y+1, 34, 12, 'Reconnect', '#FFF', '#013D5B', 5.5, '#013D5B');
+      pill(g, c.x+CW-36, c.y+1, 30, 12, 'Delete', '#FFF', '#C62828', 5.5, '#C62828');
+      c.y += 20;
+      // Pagination
+      txt(g, c.x+2, c.y+8, 'Showing 1-15 of 15', 6, '#B0ABA2');
+      pill(g, c.x+CW-36, c.y, 12, 14, '1', '#013D5B', '#FFF', 6);
+      pill(g, c.x+CW-22, c.y, 12, 14, '2', '#FFF', '#6B6760', 6, '#E0DCD3');
+    },
+    exits:[
+      {action:'Click + Add Connection', target:'add-conn'},
+      {action:'Click Connection Name', target:'detail'},
+    ]
+  },
+  {
+    id:'add-conn', name:'Add Connection', type:'screen', layer:'happy',
+    personas:['jordan'],
+    desc:'Step 1 of a 2-step wizard. Select a data platform from a card grid, then fill in credentials. OAuth-enabled platforms show Quick Connect. Test Connection validates before proceeding.',
+    draw(g, c) {
+      // Breadcrumb
+      txt(g, c.x+2, c.y+7, 'Connections', 6, '#013D5B'); txt(g, c.x+46, c.y+7, '>', 6, '#B0ABA2'); txt(g, c.x+54, c.y+7, 'Add Connection', 6, '#1C1A17', 500);
+      c.y += 14;
+      // Wizard steps
+      wizardSteps(g, c.x, c.y, CW, 1, ['Connect','Select Schemas']);
+      c.y += 22;
+      // Title + cancel
+      label(g, c.x+2, c.y, 'Add Connection', 10, 700, '#1C1A17');
+      txt(g, c.x+CW-20, c.y+2, 'Cancel', 6.5, '#013D5B', 500);
+      c.y += 16;
+      // Platform grid
+      txt(g, c.x+2, c.y+8, 'Choose a platform', 7.5, '#1C1A17', 600); c.y += 14;
+      const plats = ['Snowflake','BigQuery','PostgreSQL','Databricks','Redshift','MySQL','Oracle','S3'];
+      const cardW = (CW - 9) / 4;
+      plats.forEach((p,i) => {
+        const px = c.x + (i%4)*(cardW+3);
+        const py = c.y + Math.floor(i/4)*28;
+        const sel = i===0;
+        roundRect(g, px, py, cardW, 25, 4, sel?'#EBF4F5':'#FFF', sel?'#013D5B':'#E0DCD3', sel?1.5:0.5);
+        txt(g, px+cardW/2, py+15, p, 6.5, sel?'#013D5B':'#54514D', sel?600:400, 'middle');
+        if (i>5) {
+          // Coming soon
+          txt(g, px+cardW/2, py+22, 'soon', 4.5, '#B0ABA2', 400, 'middle');
+        }
+      });
+      c.y += 62;
+      // Divider
+      line(g, c.x, c.y, c.x+CW, c.y, '#EBE6DD'); c.y += 8;
+      // Selected platform header
+      txt(g, c.x+2, c.y+8, 'Snowflake', 8, '#1C1A17', 600);
+      txt(g, c.x+52, c.y+8, 'Change', 6, '#013D5B', 500);
+      c.y += 16;
+      // OAuth button
+      roundRect(g, c.x, c.y, CW, 20, 5, '#FFF', '#D0CBC3');
+      txt(g, c.x+CW/2, c.y+13, 'Quick Connect with OAuth', 7, '#013D5B', 600, 'middle');
+      c.y += 26;
+      // "or" divider
+      line(g, c.x, c.y+4, c.x+CW*0.4, c.y+4, '#E0DCD3');
+      txt(g, c.x+CW/2, c.y+7, 'or', 6, '#B0ABA2', 400, 'middle');
+      line(g, c.x+CW*0.6, c.y+4, c.x+CW, c.y+4, '#E0DCD3');
+      c.y += 14;
+      // Form fields
+      const fields = ['Connection Name *','Account URL *','Username *','Password *','Warehouse *','Role (optional)'];
+      fields.forEach(f => {
+        txt(g, c.x+2, c.y+7, f, 6, '#6B6760', 500);
+        roundRect(g, c.x, c.y+9, CW, 14, 3, '#FFF', '#E0DCD3', 0.8);
+        c.y += 26;
+      });
+      // Test button
+      pill(g, c.x, c.y, CW*0.45, 18, 'Test Connection', '#013D5B', '#FFF', 7.5);
+    },
+    exits:[
+      {action:'Test Connection', target:'test-decision'},
+      {action:'Quick Connect (OAuth)', target:'oauth-decision'},
+      {action:'Cancel', target:'list'},
+    ]
+  },
+  {
+    id:'test-decision', name:'Connection Test?', type:'decision', layer:'happy',
+    personas:['jordan'],
+    desc:'The system tests credentials by attempting to connect to the data platform. Button shows a loading spinner with elapsed time counter. The outcome branches into success, auth error, network error, or timeout.',
+    exits:[
+      {action:'Success', target:'test-success'},
+      {action:'Auth Failure', target:'err-auth'},
+      {action:'Network Failure', target:'err-network'},
+      {action:'Timeout (30s)', target:'err-timeout'},
+    ]
+  },
+  {
+    id:'test-success', name:'Test Passed', type:'success', layer:'happy',
+    personas:['jordan'],
+    desc:'Connection test succeeded. Green success banner with server version and schema count. The primary CTA changes to "Continue to Schema Selection" with a secondary "Re-test" option.',
+    draw(g, c) {
+      // Success banner
+      bannerBar(g, c.x, c.y, CW, 28, '#E8F5E9', '#558B2F');
+      txt(g, c.x+10, c.y+12, 'Connection successful', 7.5, '#2E7D32', 600);
+      txt(g, c.x+10, c.y+22, 'Snowflake v7.23  |  6 databases found', 6, '#558B2F');
+      c.y += 34;
+      // Test details
+      txt(g, c.x+2, c.y+8, 'Connection verified in 2.3s', 6.5, '#54514D');
+      c.y += 14;
+      roundRect(g, c.x, c.y, CW, 36, 5, '#F4F1EB', '#E0DCD3', 0.5);
+      txt(g, c.x+8, c.y+12, 'Server:', 6, '#6B6760'); txt(g, c.x+34, c.y+12, 'xy12345.us-east-1.snowflake...', 6, '#1C1A17');
+      txt(g, c.x+8, c.y+22, 'Databases:', 6, '#6B6760'); txt(g, c.x+44, c.y+22, 'PROD_DB, DEV_DB, ARCHIVE_DB, +3', 6, '#1C1A17');
+      txt(g, c.x+8, c.y+32, 'Schemas:', 6, '#6B6760'); txt(g, c.x+38, c.y+32, '14 total', 6, '#1C1A17');
+      c.y += 44;
+      // Buttons
+      pill(g, c.x, c.y, CW, 20, 'Continue to Schema Selection  \u2192', '#013D5B', '#FFF', 7.5);
+      c.y += 26;
+      pill(g, c.x, c.y, CW*0.35, 18, 'Re-test', '#FFF', '#013D5B', 7, '#013D5B');
+    },
+    exits:[
+      {action:'Continue', target:'schemas'},
+      {action:'Re-test', target:'test-decision'},
+    ]
+  },
+  {
+    id:'schemas', name:'Select Schemas', type:'screen', layer:'happy',
+    personas:['jordan'],
+    desc:'Step 2 of wizard. Split layout: left panel has an expandable database/schema tree with checkboxes; right panel shows a live summary with counts, estimated scan time, and action buttons. Right panel is sticky.',
+    draw(g, c) {
+      // Breadcrumb
+      txt(g, c.x+2, c.y+7, 'Connections', 6, '#013D5B'); txt(g, c.x+46, c.y+7, '>', 6, '#B0ABA2'); txt(g, c.x+54, c.y+7, 'Add Connection', 6, '#1C1A17', 500);
+      c.y += 14;
+      // Wizard step 2
+      wizardSteps(g, c.x, c.y, CW, 2, ['Connect','Select Schemas']);
+      c.y += 22;
+      // Split layout
+      const leftW = CW * 0.58;
+      const rightW = CW - leftW - 2;
+      const splitY = c.y;
+      const splitH = SH - CONTENT_TOP - c.y + CONTENT_TOP - 10;
+
+      // Left panel bg
+      roundRect(g, c.x, splitY, leftW, splitH, 4, '#FFF', '#E0DCD3', 0.5);
+      // Right panel bg
+      roundRect(g, c.x+leftW+2, splitY, rightW, splitH, 4, '#F4F1EB', '#E0DCD3', 0.5);
+
+      // Left panel content
+      let ly = splitY + 8;
+      txt(g, c.x+6, ly+8, 'Select schemas to scan', 7, '#1C1A17', 600); ly += 14;
+      roundRect(g, c.x+4, ly, leftW-8, 14, 3, '#F4F1EB', '#E0DCD3', 0.5);
+      txt(g, c.x+10, ly+10, 'Search databases...', 5.5, '#B0ABA2'); ly += 18;
+      // Select all
+      checkbox(g, c.x+6, ly, true, true); txt(g, c.x+18, ly+8, 'Select all', 6, '#1C1A17', 500); ly += 14;
+      line(g, c.x+4, ly, c.x+leftW-4, ly, '#EBE6DD'); ly += 6;
+      // Tree
+      txt(g, c.x+6, ly+8, '\u25BC', 5, '#6B6760'); txt(g, c.x+16, ly+8, 'PROD_DB', 7, '#1C1A17', 600); ly += 14;
+      checkbox(g, c.x+22, ly, true); txt(g, c.x+34, ly+8, 'PUBLIC', 6, '#54514D'); badge(g, c.x+56, ly+1, '42', '#EBE6DD', '#6B6760'); ly += 12;
+      checkbox(g, c.x+22, ly, true); txt(g, c.x+34, ly+8, 'ANALYTICS', 6, '#54514D'); badge(g, c.x+68, ly+1, '18', '#EBE6DD', '#6B6760'); ly += 12;
+      checkbox(g, c.x+22, ly, false); txt(g, c.x+34, ly+8, 'STAGING', 6, '#54514D'); badge(g, c.x+62, ly+1, '6', '#EBE6DD', '#6B6760'); ly += 14;
+      txt(g, c.x+6, ly+8, '\u25BC', 5, '#6B6760'); txt(g, c.x+16, ly+8, 'DEV_DB', 7, '#1C1A17', 600); ly += 14;
+      checkbox(g, c.x+22, ly, false); txt(g, c.x+34, ly+8, 'PUBLIC', 6, '#54514D'); badge(g, c.x+56, ly+1, '12', '#EBE6DD', '#6B6760'); ly += 12;
+      checkbox(g, c.x+22, ly, false); txt(g, c.x+34, ly+8, 'SANDBOX', 6, '#54514D'); badge(g, c.x+64, ly+1, '3', '#EBE6DD', '#6B6760'); ly += 14;
+      txt(g, c.x+6, ly+8, '\u25B6', 5, '#6B6760'); txt(g, c.x+16, ly+8, 'ARCHIVE_DB', 7, '#1C1A17', 600);
+
+      // Right panel content
+      let ry = splitY + 8;
+      const rx = c.x+leftW+6;
+      txt(g, rx, ry+7, 'Snowflake', 7, '#1C1A17', 600); ry += 10;
+      txt(g, rx, ry+7, 'xy12345.us-east-1', 5.5, '#B0ABA2'); ry += 16;
+      line(g, rx, ry, rx+rightW-8, ry, '#E0DCD3'); ry += 8;
+      txt(g, rx, ry+6, 'SELECTED', 5, '#6B6760', 600);  ry += 12;
+      txt(g, rx, ry+9, '2 schemas', 9, '#1C1A17', 700); ry += 12;
+      txt(g, rx, ry+7, '60 tables', 7, '#54514D'); ry += 16;
+      txt(g, rx, ry+6, 'EST. SCAN TIME', 5, '#6B6760', 600); ry += 12;
+      txt(g, rx, ry+8, '~8 min', 8, '#1C1A17', 600); ry += 16;
+      line(g, rx, ry, rx+rightW-8, ry, '#E0DCD3'); ry += 8;
+      txt(g, rx, ry+6, 'SCHEMAS INCLUDED', 5, '#6B6760', 600); ry += 12;
+      txt(g, rx, ry+7, 'PUBLIC (42 tables)', 6, '#1C1A17'); ry += 10;
+      txt(g, rx, ry+7, 'ANALYTICS (18 tables)', 6, '#1C1A17'); ry += 18;
+      // Buttons at bottom of right panel
+      const bw = (rightW - 10) / 3;
+      pill(g, rx, ry, bw-2, 16, 'Back', '#FFF', '#6B6760', 6, '#E0DCD3');
+      pill(g, rx+bw, ry, bw+4, 16, 'Save Only', '#FFF', '#013D5B', 6, '#013D5B');
+      pill(g, rx+bw*2+6, ry, bw+4, 16, 'Save+Scan', '#013D5B', '#FFF', 6);
+    },
+    exits:[
+      {action:'Save + Start Scan', target:'detail-scanning'},
+      {action:'Save Only', target:'detail'},
+      {action:'Back', target:'add-conn'},
+    ]
+  },
+  {
+    id:'detail', name:'Connection Detail', type:'screen', layer:'happy',
+    personas:['jordan','priya'],
+    desc:'Detail page for a healthy connection. Metric cards (status, last scan, schemas, classification %), health chart, recent scans table, and tabs for Schemas, Scan History, and Settings.',
+    draw(g, c) {
+      // Breadcrumb
+      txt(g, c.x+2, c.y+7, 'Connections', 6, '#013D5B'); txt(g, c.x+46, c.y+7, '>', 6, '#B0ABA2'); txt(g, c.x+54, c.y+7, 'Prod Data Warehouse', 6, '#1C1A17', 500);
+      c.y += 14;
+      // Header with status
+      label(g, c.x+2, c.y, 'Prod Data Warehouse', 10, 700, '#1C1A17');
+      statusPill(g, c.x+CW-80, c.y-3, 'Active', '#558B2F');
+      c.y += 4;
+      // Action buttons
+      pill(g, c.x+CW-90, c.y, 36, 14, 'Edit', '#FFF', '#54514D', 6, '#E0DCD3');
+      pill(g, c.x+CW-50, c.y, 48, 14, 'Trigger Scan', '#013D5B', '#FFF', 6);
+      c.y += 22;
+      // Metric cards (2x2)
+      const mw = (CW-4)/2;
+      const metrics = [{l:'Status',v:'Active',color:'#558B2F'},{l:'Last Scan',v:'2h ago',color:'#1C1A17'},{l:'Schemas',v:'42',color:'#1C1A17'},{l:'Classification',v:'87%',color:'#1C1A17'}];
+      metrics.forEach((m,i) => {
+        const mx = c.x + (i%2)*(mw+4);
+        const my = c.y + Math.floor(i/2)*30;
+        roundRect(g, mx, my, mw, 26, 4, '#FFF', '#E0DCD3', 0.5);
+        txt(g, mx+6, my+10, m.l, 5.5, '#6B6760');
+        txt(g, mx+6, my+22, m.v, 9, m.color, 700);
+      });
+      c.y += 64;
+      // Tabs
+      const tabs = ['Overview','Schemas (42)','Scan History','Settings'];
+      const tabW = CW / tabs.length;
+      tabs.forEach((t,i) => {
+        txt(g, c.x + i*tabW + tabW/2, c.y+10, t, 6.5, i===0?'#013D5B':'#B0ABA2', i===0?600:400, 'middle');
+      });
+      line(g, c.x, c.y+14, c.x+CW, c.y+14, '#E0DCD3');
+      rect(g, c.x, c.y+13, tabW, 2, '#013D5B');
+      c.y += 20;
+      // Health chart
+      roundRect(g, c.x, c.y, CW, 54, 4, '#FFF', '#E0DCD3', 0.5);
+      txt(g, c.x+6, c.y+10, 'Connection Health', 6.5, '#1C1A17', 600);
+      pill(g, c.x+CW-46, c.y+2, 14, 12, '24h', '#013D5B', '#FFF', 5);
+      pill(g, c.x+CW-30, c.y+2, 10, 12, '7d', '#FFF', '#6B6760', 5, '#E0DCD3');
+      pill(g, c.x+CW-18, c.y+2, 12, 12, '30d', '#FFF', '#6B6760', 5, '#E0DCD3');
+      // Chart line
+      const pts = [];
+      for (let i = 0; i < 12; i++) pts.push([c.x+8+i*(CW-16)/11, c.y+20+Math.sin(i*0.8)*8+Math.random()*6]);
+      g.append('polyline').attr('points', pts.map(p=>p.join(',')).join(' '))
+        .attr('fill','none').attr('stroke','#013D5B').attr('stroke-width',1.2).attr('stroke-linecap','round');
+      // Threshold line
+      line(g, c.x+8, c.y+42, c.x+CW-8, c.y+42, '#C49A00', 0.5, '3,2');
+      txt(g, c.x+CW-30, c.y+50, '200ms threshold', 4.5, '#C49A00');
+      c.y += 60;
+      // Recent scans mini table
+      roundRect(g, c.x, c.y, CW, 56, 4, '#FFF', '#E0DCD3', 0.5);
+      txt(g, c.x+6, c.y+10, 'Recent Scans', 6.5, '#1C1A17', 600);
+      txt(g, c.x+CW-22, c.y+10, 'View All', 5.5, '#013D5B', 500);
+      const scans = [{d:'Mar 15, 10:32',dur:'12 min',t:'42',cl:'8 new',s:'success'},{d:'Mar 14, 10:30',dur:'11 min',t:'42',cl:'2 new',s:'success'},{d:'Mar 13, 10:31',dur:'14 min',t:'42',cl:'0',s:'success'}];
+      let sy = c.y + 16;
+      rect(g, c.x+4, sy, CW-8, 10, '#F4F1EB');
+      txt(g, c.x+6, sy+7, 'Date', 5, '#6B6760', 600); txt(g, c.x+54, sy+7, 'Duration', 5, '#6B6760', 600); txt(g, c.x+92, sy+7, 'Tables', 5, '#6B6760', 600); txt(g, c.x+122, sy+7, 'New', 5, '#6B6760', 600); txt(g, c.x+CW-22, sy+7, 'Status', 5, '#6B6760', 600);
+      sy += 11;
+      scans.forEach(s => {
+        txt(g, c.x+6, sy+8, s.d, 5.5, '#54514D'); txt(g, c.x+54, sy+8, s.dur, 5.5, '#54514D'); txt(g, c.x+92, sy+8, s.t, 5.5, '#54514D'); txt(g, c.x+122, sy+8, s.cl, 5.5, '#54514D');
+        statusDot(g, c.x+CW-22, sy+5, '#558B2F');
+        sy += 10;
+      });
+    },
+    exits:[
+      {action:'Back to List', target:'list'},
+      {action:'Click Trigger Scan', target:'detail-scanning'},
+      {action:'Reconnect (error state)', target:'reconnect'},
+    ]
+  },
+
+  // ── ERROR PATH (Row 2) ──
+  {
+    id:'err-auth', name:'Auth Error', type:'error', layer:'error',
+    personas:['jordan'],
+    desc:'Authentication failed. Red error banner with specific reason (wrong password, expired token, insufficient permissions). Affected field gets red border. User can correct and retry immediately.',
+    draw(g, c) {
+      // Error banner
+      bannerBar(g, c.x, c.y, CW, 34, '#FFEBEE', '#C62828');
+      txt(g, c.x+10, c.y+12, 'Authentication failed', 7.5, '#C62828', 600);
+      txt(g, c.x+10, c.y+22, 'The password provided is incorrect.', 6, '#991B1B');
+      txt(g, c.x+10, c.y+30, 'Check your credentials and try again.', 6, '#991B1B');
+      c.y += 40;
+      // Form with error field
+      const fields = ['Connection Name *','Account URL *','Username *'];
+      fields.forEach(f => {
+        txt(g, c.x+2, c.y+7, f, 6, '#6B6760', 500);
+        roundRect(g, c.x, c.y+9, CW, 14, 3, '#FFF', '#E0DCD3', 0.8);
+        c.y += 26;
+      });
+      // Password field with error
+      txt(g, c.x+2, c.y+7, 'Password *', 6, '#C62828', 500);
+      roundRect(g, c.x, c.y+9, CW, 14, 3, '#FFFAFA', '#C62828', 1.5);
+      txt(g, c.x+4, c.y+19, '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022', 7, '#C62828');
+      txt(g, c.x+2, c.y+27, 'Incorrect password', 5.5, '#C62828');
+      c.y += 34;
+      // Remaining fields
+      ['Warehouse *','Role'].forEach(f => {
+        txt(g, c.x+2, c.y+7, f, 6, '#6B6760', 500);
+        roundRect(g, c.x, c.y+9, CW, 14, 3, '#FFF', '#E0DCD3', 0.8);
+        c.y += 26;
+      });
+      pill(g, c.x, c.y, CW*0.45, 18, 'Test Connection', '#013D5B', '#FFF', 7.5);
+    },
+    exits:[
+      {action:'Fix & Retry', target:'test-decision'},
+      {action:'Cancel', target:'list'},
+    ]
+  },
+  {
+    id:'err-network', name:'Network Error', type:'error', layer:'error',
+    personas:['jordan'],
+    desc:'Host unreachable. Red error banner with diagnostic checklist: verify hostname, check firewall rules (port 443), confirm service not in maintenance. Helps user distinguish infra issues from credential problems.',
+    draw(g, c) {
+      bannerBar(g, c.x, c.y, CW, 58, '#FFEBEE', '#C62828');
+      txt(g, c.x+10, c.y+12, 'Unable to reach host', 7.5, '#C62828', 600);
+      txt(g, c.x+10, c.y+24, 'Diagnostic checklist:', 6, '#991B1B', 500);
+      const checks = ['Verify the hostname is correct','Check that firewall allows port 443','Confirm service is not in maintenance'];
+      checks.forEach((ch,i) => {
+        statusDot(g, c.x+14, c.y+33+i*9, '#C62828');
+        txt(g, c.x+22, c.y+36+i*9, ch, 6, '#54514D');
+      });
+      c.y += 66;
+      // Host field highlighted
+      txt(g, c.x+2, c.y+7, 'Account URL *', 6, '#C62828', 500);
+      roundRect(g, c.x, c.y+9, CW, 14, 3, '#FFFAFA', '#C62828', 1.5);
+      txt(g, c.x+4, c.y+19, 'xy12345.us-east-1.snowflake...', 6, '#C62828');
+      txt(g, c.x+2, c.y+27, 'Could not resolve hostname', 5.5, '#C62828');
+      c.y += 36;
+      // Other fields
+      ['Username *','Password *','Warehouse *'].forEach(f => {
+        txt(g, c.x+2, c.y+7, f, 6, '#6B6760', 500);
+        roundRect(g, c.x, c.y+9, CW, 14, 3, '#FFF', '#E0DCD3', 0.8);
+        c.y += 26;
+      });
+      pill(g, c.x, c.y, CW*0.45, 18, 'Test Connection', '#013D5B', '#FFF', 7.5);
+    },
+    exits:[
+      {action:'Fix & Retry', target:'test-decision'},
+      {action:'Cancel', target:'list'},
+    ]
+  },
+  {
+    id:'err-timeout', name:'Timeout Error', type:'error', layer:'error',
+    personas:['jordan'],
+    desc:'Connection timed out after 30 seconds. Yellow warning banner with elapsed time and option to retry with extended 60-second timeout. Captures slow but not broken connections.',
+    draw(g, c) {
+      bannerBar(g, c.x, c.y, CW, 28, '#FFF8E1', '#C49A00');
+      txt(g, c.x+10, c.y+12, 'Connection timed out', 7.5, '#7A6200', 600);
+      txt(g, c.x+10, c.y+22, 'No response after 30 seconds.', 6, '#7A6200');
+      c.y += 34;
+      // Timer visualization
+      roundRect(g, c.x, c.y, CW, 32, 5, '#FFFDF5', '#E8D44D', 0.5);
+      txt(g, c.x+CW/2, c.y+13, '30.0s', 12, '#7A6200', 700, 'middle');
+      txt(g, c.x+CW/2, c.y+24, 'elapsed before timeout', 6, '#B0ABA2', 400, 'middle');
+      c.y += 40;
+      txt(g, c.x+2, c.y+8, 'This can happen with:', 6.5, '#54514D', 500); c.y += 14;
+      const reasons = ['Slow network connections','High server load','Large account metadata'];
+      reasons.forEach(r => {
+        statusDot(g, c.x+6, c.y+4, '#C49A00');
+        txt(g, c.x+14, c.y+7, r, 6, '#54514D');
+        c.y += 12;
+      });
+      c.y += 8;
+      pill(g, c.x, c.y, CW, 20, 'Retry with Extended Timeout (60s)', '#FFF', '#7A6200', 7, '#C49A00');
+      c.y += 26;
+      pill(g, c.x, c.y, CW*0.35, 18, 'Cancel', '#FFF', '#6B6760', 7, '#E0DCD3');
+    },
+    exits:[
+      {action:'Retry (60s)', target:'test-decision'},
+      {action:'Cancel', target:'list'},
+    ]
+  },
+  {
+    id:'oauth-decision', name:'OAuth Result?', type:'decision', layer:'error',
+    personas:['jordan'],
+    desc:'User clicked Quick Connect (OAuth). A browser popup opens for the OAuth provider. The original page shows "Waiting for authorization..." with a pulsing animation. The popup result determines the next path.',
+    exits:[
+      {action:'OAuth Authorized', target:'schemas'},
+      {action:'OAuth Denied / Failed', target:'err-oauth'},
+    ]
+  },
+  {
+    id:'err-oauth', name:'OAuth Failed', type:'error', layer:'error',
+    personas:['jordan'],
+    desc:'OAuth authorization was denied or failed. The popup closes and an error banner appears. User can retry OAuth or fall back to manual credential entry.',
+    draw(g, c) {
+      bannerBar(g, c.x, c.y, CW, 28, '#FFEBEE', '#C62828');
+      txt(g, c.x+10, c.y+12, 'Authorization failed', 7.5, '#C62828', 600);
+      txt(g, c.x+10, c.y+22, 'OAuth was cancelled or denied by provider.', 6, '#991B1B');
+      c.y += 36;
+      // Illustration area
+      roundRect(g, c.x, c.y, CW, 50, 5, '#FFFAFA', '#FECDD3', 0.5);
+      txt(g, c.x+CW/2, c.y+20, '\u2716', 18, '#EF9A9A', 400, 'middle');
+      txt(g, c.x+CW/2, c.y+38, 'Authorization window closed', 6, '#991B1B', 400, 'middle');
+      c.y += 58;
+      txt(g, c.x+2, c.y+8, 'What you can do:', 6.5, '#1C1A17', 600); c.y += 14;
+      const opts = ['Retry the OAuth authorization flow','Enter credentials manually instead','Check your provider permissions'];
+      opts.forEach((o,i) => {
+        txt(g, c.x+10, c.y+8, (i+1)+'. '+o, 6, '#54514D');
+        c.y += 12;
+      });
+      c.y += 8;
+      pill(g, c.x, c.y, CW*0.5, 18, 'Retry OAuth', '#FFF', '#013D5B', 7, '#013D5B');
+      c.y += 24;
+      pill(g, c.x, c.y, CW*0.65, 18, 'Enter Credentials Manually', '#FFF', '#6B6760', 7, '#E0DCD3');
+    },
+    exits:[
+      {action:'Retry OAuth', target:'oauth-decision'},
+      {action:'Manual Entry', target:'add-conn'},
+    ]
+  },
+
+  // ── ADDITIONAL STATES (Row 3) ──
+  {
+    id:'empty', name:'Empty State', type:'screen', layer:'happy',
+    personas:['jordan'],
+    desc:'First-time experience when no connections exist. Centered empty state with connection icon, title, supportive copy, platform logo row, and primary CTA. Promises setup in under 2 minutes.',
+    draw(g, c) {
+      c.y += 40;
+      // Icon
+      g.append('circle').attr('cx',c.x+CW/2).attr('cy',c.y+20).attr('r',22).attr('fill','#F4F1EB').attr('stroke','#E0DCD3');
+      txt(g, c.x+CW/2, c.y+26, '\u26A1', 18, '#B0ABA2', 400, 'middle');
+      c.y += 50;
+      txt(g, c.x+CW/2, c.y+10, 'Connect your first', 9, '#1C1A17', 700, 'middle');
+      txt(g, c.x+CW/2, c.y+22, 'data source', 9, '#1C1A17', 700, 'middle');
+      c.y += 30;
+      txt(g, c.x+CW/2, c.y+8, 'Connect a data platform so the system', 6, '#54514D', 400, 'middle');
+      txt(g, c.x+CW/2, c.y+17, 'can scan and classify your data.', 6, '#54514D', 400, 'middle');
+      txt(g, c.x+CW/2, c.y+26, 'It takes under 2 minutes.', 6, '#54514D', 400, 'middle');
+      c.y += 36;
+      // Platform logos
+      const plats = ['Snowflake','BigQuery','PostgreSQL','Databricks'];
+      const logoW = 40;
+      const startX = c.x + (CW - plats.length * logoW - (plats.length-1)*6) / 2;
+      plats.forEach((p,i) => {
+        const lx = startX + i * (logoW + 6);
+        roundRect(g, lx, c.y, logoW, 24, 4, '#FFF', '#E0DCD3', 0.5);
+        txt(g, lx+logoW/2, c.y+15, p.substring(0,4), 6, '#6B6760', 500, 'middle');
+      });
+      c.y += 34;
+      pill(g, c.x + CW*0.15, c.y, CW*0.7, 22, '+ Add Connection', '#013D5B', '#FFF', 8);
+    },
+    exits:[
+      {action:'Click Add Connection', target:'add-conn'},
+    ]
+  },
+  {
+    id:'detail-scanning', name:'Scanning In Progress', type:'success', layer:'happy',
+    personas:['jordan'],
+    desc:'Connection detail during an active scan. Blue info banner with real-time progress percentage, tables scanned count, and animated progress bar. User can cancel or navigate away (scan continues in background).',
+    draw(g, c) {
+      // Breadcrumb
+      txt(g, c.x+2, c.y+7, 'Connections', 6, '#013D5B'); txt(g, c.x+46, c.y+7, '>', 6, '#B0ABA2'); txt(g, c.x+54, c.y+7, 'Prod Data Warehouse', 6, '#1C1A17', 500);
+      c.y += 14;
+      // Header
+      label(g, c.x+2, c.y, 'Prod Data Warehouse', 10, 700, '#1C1A17');
+      statusPill(g, c.x+CW-80, c.y-3, 'Active', '#558B2F');
+      c.y += 18;
+      // Scan progress banner
+      bannerBar(g, c.x, c.y, CW, 40, '#E3F2FD', '#1565C0');
+      txt(g, c.x+10, c.y+12, 'Scanning in progress...', 7, '#0D47A1', 600);
+      txt(g, c.x+10, c.y+22, '42 of 127 tables scanned', 6, '#1565C0');
+      // Progress bar
+      roundRect(g, c.x+10, c.y+30, CW-20, 5, 2.5, '#BBDEFB', 'none');
+      roundRect(g, c.x+10, c.y+30, (CW-20)*0.34, 5, 2.5, '#1565C0', 'none');
+      txt(g, c.x+CW-20, c.y+12, '34%', 7, '#0D47A1', 700);
+      c.y += 48;
+      // Cancel link
+      txt(g, c.x+CW-30, c.y+7, 'Cancel Scan', 6, '#6B6760', 500); c.y += 16;
+      // Metric cards
+      const mw = (CW-4)/2;
+      const metrics = [{l:'Status',v:'Active'},{l:'Last Scan',v:'In progress...'},{l:'Schemas',v:'42'},{l:'Classification',v:'87%'}];
+      metrics.forEach((m,i) => {
+        const mx = c.x + (i%2)*(mw+4);
+        const my = c.y + Math.floor(i/2)*30;
+        roundRect(g, mx, my, mw, 26, 4, '#FFF', '#E0DCD3', 0.5);
+        txt(g, mx+6, my+10, m.l, 5.5, '#6B6760');
+        txt(g, mx+6, my+22, m.v, 8, i===1?'#1565C0':'#1C1A17', 600);
+      });
+      c.y += 64;
+      // Tabs
+      const tabs = ['Overview','Schemas (42)','Scan History','Settings'];
+      const tabW = CW / tabs.length;
+      tabs.forEach((t,i) => {
+        txt(g, c.x + i*tabW + tabW/2, c.y+10, t, 6.5, i===0?'#013D5B':'#B0ABA2', i===0?600:400, 'middle');
+      });
+      line(g, c.x, c.y+14, c.x+CW, c.y+14, '#E0DCD3');
+      rect(g, c.x, c.y+13, tabW, 2, '#013D5B');
+      c.y += 22;
+      // Scan log preview
+      roundRect(g, c.x, c.y, CW, 40, 4, '#FFF', '#E0DCD3', 0.5);
+      txt(g, c.x+6, c.y+10, 'Live Scan Log', 6.5, '#1C1A17', 600);
+      txt(g, c.x+6, c.y+22, '10:32:14  Scanning PUBLIC.customers...', 5.5, '#54514D');
+      txt(g, c.x+6, c.y+30, '10:32:12  Completed PUBLIC.orders (1.2s)', 5.5, '#558B2F');
+      txt(g, c.x+6, c.y+38, '10:32:10  Completed PUBLIC.products (0.8s)', 5.5, '#558B2F');
+    },
+    exits:[
+      {action:'Scan Completes', target:'detail'},
+      {action:'Cancel Scan', target:'detail'},
+    ]
+  },
+  {
+    id:'reconnect', name:'Reconnect Flow', type:'screen', layer:'error',
+    personas:['jordan'],
+    desc:'Reconnection for a broken connection. Platform is locked (already known). Host/account pre-filled and read-only. Only credential fields (username, password/token) are editable. Title shows "Reconnect — [Name]".',
+    draw(g, c) {
+      // Breadcrumb
+      txt(g, c.x+2, c.y+7, 'Connections', 6, '#013D5B'); txt(g, c.x+46, c.y+7, '>', 6, '#B0ABA2'); txt(g, c.x+54, c.y+7, 'Reconnect', 6, '#1C1A17', 500);
+      c.y += 14;
+      label(g, c.x+2, c.y, 'Reconnect \u2014 Prod DW', 10, 700, '#1C1A17');
+      txt(g, c.x+CW-20, c.y+2, 'Cancel', 6.5, '#013D5B', 500);
+      c.y += 18;
+      // Locked platform
+      roundRect(g, c.x, c.y, CW, 24, 5, '#F4F1EB', '#E0DCD3', 0.5);
+      txt(g, c.x+10, c.y+15, 'Snowflake', 8, '#1C1A17', 600);
+      badge(g, c.x+CW-38, c.y+6, 'Locked', '#E0DCD3', '#6B6760');
+      c.y += 32;
+      // Pre-filled disabled fields
+      ['Account URL','Warehouse'].forEach(f => {
+        txt(g, c.x+2, c.y+7, f + ' (pre-filled)', 6, '#B0ABA2', 500);
+        roundRect(g, c.x, c.y+9, CW, 14, 3, '#F4F1EB', '#E0DCD3', 0.5);
+        txt(g, c.x+6, c.y+19, f==='Account URL'?'xy12345.us-east-1.snowflake...':'COMPUTE_WH', 6, '#6B6760');
+        c.y += 28;
+      });
+      // Editable credential fields
+      txt(g, c.x+CW/2, c.y+8, '\u2014  Enter new credentials below  \u2014', 6, '#6B6760', 500, 'middle');
+      c.y += 16;
+      ['Username *','Password *','Role (optional)'].forEach(f => {
+        txt(g, c.x+2, c.y+7, f, 6, '#6B6760', 500);
+        roundRect(g, c.x, c.y+9, CW, 14, 3, '#FFF', '#013D5B', 0.8);
+        c.y += 28;
+      });
+      c.y += 4;
+      pill(g, c.x, c.y, CW*0.45, 18, 'Test Connection', '#013D5B', '#FFF', 7.5);
+    },
+    exits:[
+      {action:'Test Connection', target:'test-decision'},
+      {action:'Cancel', target:'detail'},
+    ]
+  },
+  {
+    id:'degraded', name:'Degraded Connection', type:'error', layer:'error',
+    personas:['jordan','priya'],
+    desc:'Connection detail showing degraded state. Yellow warning banner about intermittent connectivity. Health chart highlights latency spikes. Status tag shows "Degraded". User can investigate or reconnect.',
+    draw(g, c) {
+      // Breadcrumb
+      txt(g, c.x+2, c.y+7, 'Connections', 6, '#013D5B'); txt(g, c.x+46, c.y+7, '>', 6, '#B0ABA2'); txt(g, c.x+54, c.y+7, 'Staging DB', 6, '#1C1A17', 500);
+      c.y += 14;
+      label(g, c.x+2, c.y, 'Staging DB', 10, 700, '#1C1A17');
+      statusPill(g, c.x+CW-80, c.y-3, 'Degraded', '#C49A00');
+      c.y += 18;
+      // Warning banner
+      bannerBar(g, c.x, c.y, CW, 28, '#FFF8E1', '#C49A00');
+      txt(g, c.x+10, c.y+12, 'Intermittent connectivity detected', 7, '#7A6200', 600);
+      txt(g, c.x+10, c.y+22, 'Scans may experience delays.', 6, '#7A6200');
+      c.y += 34;
+      // Metric cards
+      const mw = (CW-4)/2;
+      [{l:'Status',v:'Degraded',color:'#C49A00'},{l:'Last Scan',v:'4h ago',color:'#1C1A17'},{l:'Schemas',v:'12',color:'#1C1A17'},{l:'Classification',v:'72%',color:'#1C1A17'}].forEach((m,i) => {
+        const mx = c.x + (i%2)*(mw+4);
+        const my = c.y + Math.floor(i/2)*30;
+        roundRect(g, mx, my, mw, 26, 4, '#FFF', i===0?'#E8D44D':'#E0DCD3', i===0?1:0.5);
+        txt(g, mx+6, my+10, m.l, 5.5, '#6B6760');
+        txt(g, mx+6, my+22, m.v, 8, m.color, 600);
+      });
+      c.y += 64;
+      // Health chart with spikes
+      roundRect(g, c.x, c.y, CW, 54, 4, '#FFF', '#E0DCD3', 0.5);
+      txt(g, c.x+6, c.y+10, 'Connection Health', 6.5, '#1C1A17', 600);
+      const pts = [];
+      for (let i = 0; i < 12; i++) {
+        const spike = (i===4||i===7||i===9) ? 30 : 0;
+        pts.push([c.x+8+i*(CW-16)/11, c.y+38-spike-Math.random()*4]);
+      }
+      g.append('polyline').attr('points',pts.map(p=>p.join(',')).join(' '))
+        .attr('fill','none').attr('stroke','#C49A00').attr('stroke-width',1.2).attr('stroke-linecap','round');
+      line(g, c.x+8, c.y+42, c.x+CW-8, c.y+42, '#C62828', 0.5, '3,2');
+      txt(g, c.x+CW-30, c.y+50, '200ms threshold', 4.5, '#C62828');
+      // Spike annotations
+      txt(g, c.x+8+4*(CW-16)/11-6, c.y+17, '\u26A0 spike', 4.5, '#C49A00');
+      c.y += 60;
+      pill(g, c.x, c.y, CW*0.35, 18, 'Reconnect', '#FFF', '#C49A00', 7, '#C49A00');
+      pill(g, c.x+CW*0.38, c.y, CW*0.32, 18, 'Dismiss', '#FFF', '#6B6760', 7, '#E0DCD3');
+    },
+    exits:[
+      {action:'Reconnect', target:'reconnect'},
+      {action:'Dismiss', target:'detail'},
+    ]
+  },
+];
+
+// ════════════════════════════════════════════
+//  POSITIONING
+// ════════════════════════════════════════════
+const COL_W = SW + 200;  // generous column spacing
+const ROW_H = SH + 260;  // generous row spacing for connector labels
+
+function col(n) { return 100 + n * COL_W; }
+function row(n) { return 100 + n * ROW_H; }
+
+const POS = {
+  // Row 0: Happy path — straight left-to-right
+  'list':             { x: col(0), y: row(0) },
+  'add-conn':         { x: col(1), y: row(0) },
+  'test-decision':    { x: col(2) + SW/2, y: row(0) + SH/2 },
+  'test-success':     { x: col(3), y: row(0) },
+  'schemas':          { x: col(4), y: row(0) },
+  'detail':           { x: col(5), y: row(0) },
+  // Row 1: Error states — centered under the decision diamond
+  'err-oauth':        { x: col(0), y: row(1) },
+  'oauth-decision':   { x: col(1) + SW/2, y: row(1) + SH/2 },
+  'err-auth':         { x: col(2), y: row(1) },
+  'err-network':      { x: col(3), y: row(1) },
+  'err-timeout':      { x: col(4), y: row(1) },
+  // Row 2: Additional states — spread under relevant happy path screens
+  'empty':            { x: col(0), y: row(2) },
+  'degraded':         { x: col(3), y: row(2) },
+  'detail-scanning':  { x: col(4), y: row(2) },
+  'reconnect':        { x: col(5), y: row(2) },
+};
+
+screens.forEach(s => {
+  const p = POS[s.id];
+  if (p) { s.x = p.x; s.y = p.y; }
+});
+
+// ════════════════════════════════════════════
+//  SVG SETUP
+// ════════════════════════════════════════════
+let W = window.innerWidth;
+let H = window.innerHeight - 56;
+const svg = d3.select('#flow-svg').attr('width', W).attr('height', H);
+const defs = svg.append('defs');
+
+// Arrow markers
+[['arr','#013D5B'],['arr-err','#C62828'],['arr-ok','#558B2F'],['arr-back','#B0ABA2']].forEach(([id,c]) => {
+  defs.append('marker').attr('id',id).attr('viewBox','0 0 8 6').attr('refX',8).attr('refY',3)
+    .attr('markerWidth',8).attr('markerHeight',6).attr('orient','auto-start-reverse')
+    .append('path').attr('d','M0,0 L8,3 L0,6 Z').attr('fill',c);
+});
+
+// Shadows
+[['shd',2,4,0.05],['shd-h',3,6,0.1]].forEach(([id,dy,dev,op]) => {
+  const f = defs.append('filter').attr('id',id).attr('x','-8%').attr('y','-8%').attr('width','120%').attr('height','120%');
+  f.append('feDropShadow').attr('dx',0).attr('dy',dy).attr('stdDeviation',dev).attr('flood-color',`rgba(0,0,0,${op})`);
+});
+
+const container = svg.append('g');
+const zoomBehavior = d3.zoom().scaleExtent([0.08,3]).on('zoom', e => container.attr('transform', e.transform));
+svg.call(zoomBehavior);
+
+// ════════════════════════════════════════════
+//  DRAWING HELPERS
+// ════════════════════════════════════════════
+function txt(g,x,y,t,size,fill,weight,anchor) {
+  const el = g.append('text').attr('x',x).attr('y',y).text(t)
+    .attr('font-size',size+'px').attr('fill',fill);
+  if (weight) el.attr('font-weight',weight);
+  if (anchor) el.attr('text-anchor',anchor);
+  return el;
+}
+function label(g,x,y,t,size,weight,fill) { return txt(g,x,y+size*0.85,t,size,fill,weight); }
+function rect(g,x,y,w,h,fill,stroke,sw) {
+  const r = g.append('rect').attr('x',x).attr('y',y).attr('width',w).attr('height',h).attr('fill',fill);
+  if (stroke) r.attr('stroke',stroke).attr('stroke-width',sw||1);
+  return r;
+}
+function roundRect(g,x,y,w,h,r,fill,stroke,sw) {
+  const el = g.append('rect').attr('x',x).attr('y',y).attr('width',w).attr('height',h).attr('rx',r).attr('fill',fill);
+  if (stroke && stroke !== 'none') el.attr('stroke',stroke).attr('stroke-width',sw||1);
+  return el;
+}
+function line(g,x1,y1,x2,y2,stroke,sw,dash) {
+  const l = g.append('line').attr('x1',x1).attr('y1',y1).attr('x2',x2).attr('y2',y2).attr('stroke',stroke).attr('stroke-width',sw||1);
+  if (dash) l.attr('stroke-dasharray',dash);
+  return l;
+}
+function pill(g,x,y,w,h,text,bg,fg,fs,border) {
+  roundRect(g,x,y,w,h,h/2,bg,border||'none',border?1:0);
+  txt(g,x+w/2,y+h*0.65,text,fs||7,fg,500,'middle');
+}
+function badge(g,x,y,text,bg,fg) {
+  const w = text.length * 5 + 8;
+  roundRect(g,x,y,w,12,6,bg,'none');
+  txt(g,x+w/2,y+9,text,5.5,fg,500,'middle');
+}
+function statusDot(g,x,y,color) { g.append('circle').attr('cx',x).attr('cy',y).attr('r',3).attr('fill',color); }
+function statusPill(g,x,y,text,color) {
+  const w = text.length * 5.5 + 20;
+  roundRect(g,x,y,w,16,8,color+'18','none');
+  statusDot(g,x+9,y+8,color);
+  txt(g,x+16,y+11,text,6.5,color,500);
+}
+function checkbox(g,x,y,checked,indeterminate) {
+  roundRect(g,x,y,10,10,2,checked?'#013D5B':'#FFF',checked?'#013D5B':'#D0CBC3',1);
+  if (checked && !indeterminate) txt(g,x+5,y+8,'\u2713',7,'#FFF',600,'middle');
+  if (indeterminate) rect(g,x+3,y+4,4,2,'#FFF');
+}
+function bannerBar(g,x,y,w,h,bg,accent) {
+  roundRect(g,x,y,w,h,5,bg,'none');
+  rect(g,x,y+2,3,h-4,accent);
+}
+function wizardSteps(g,x,y,w,active,labels) {
+  const gap = 40;
+  labels.forEach((l,i) => {
+    const cx = x + 8 + i * gap;
+    const done = i < active - 1;
+    const current = i === active - 1;
+    g.append('circle').attr('cx',cx).attr('cy',y+7).attr('r',6)
+      .attr('fill', done?'#558B2F':current?'#013D5B':'#E0DCD3');
+    if (done) txt(g,cx,y+10,'\u2713',7,'#FFF',600,'middle');
+    else txt(g,cx,y+10,String(i+1),6,'#FFF',600,'middle');
+    txt(g,cx+10,y+10,l,6, current?'#1C1A17':'#6B6760', current?500:400);
+    if (i < labels.length-1) {
+      line(g, cx+10+l.length*3.5, y+7, cx+gap-8, y+7, done||current?'#013D5B':'#E0DCD3', 1);
+    }
+  });
+}
+
+// ════════════════════════════════════════════
+//  DRAW SCREENS
+// ════════════════════════════════════════════
+function drawScreen(parent, s) {
+  if (s.type === 'decision') return drawDiamond(parent, s);
+
+  const c = COLORS[s.type] || COLORS.screen;
+  const g = parent.append('g').attr('class','screen-group').datum(s)
+    .attr('transform',`translate(${s.x},${s.y})`).style('cursor','pointer');
+
+  // Frame
+  roundRect(g,0,0,SW,SH,10,c.bg,c.border,1.5).attr('filter','url(#shd)').attr('class','frame');
+
+  // Window chrome
+  roundRect(g,1.5,1.5,SW-3,CHROME_H,9,c.chrome,'none');
+  rect(g,1.5,CHROME_H-4,SW-3,5,c.chrome);
+  [12,24,36].forEach((dx,i) => {
+    g.append('circle').attr('cx',dx).attr('cy',CHROME_H/2+1).attr('r',4)
+      .attr('fill',['#FF6058','#FFBE2F','#24CC3E'][i]).attr('opacity',0.7);
+  });
+
+  // App header bar
+  rect(g,0,CHROME_H,SW,HEADER_H,c.chrome);
+  line(g,0,CHROME_H+HEADER_H,SW,CHROME_H+HEADER_H,c.border,0.5);
+  // Mini sidebar
+  rect(g,1.5,CHROME_H,SIDEBAR_W,SH-CHROME_H-1.5,c.sidebar);
+  g.append('rect').attr('x',1.5).attr('y',SH-1.5).attr('width',SIDEBAR_W).attr('height',0).attr('fill',c.sidebar);
+  // Round bottom-left corner of sidebar
+  roundRect(g,1.5,SH-11,SIDEBAR_W,10,0,c.sidebar,'none');
+  // Sidebar nav items (tiny)
+  for (let i = 0; i < 6; i++) {
+    roundRect(g, 6, CHROME_H+HEADER_H+8+i*16, SIDEBAR_W-12, 10, 3, i===2?'rgba(255,255,255,0.15)':'transparent','none');
+    rect(g, 10, CHROME_H+HEADER_H+11+i*16, 16, 4, 'rgba(255,255,255,0.3)');
+  }
+  // Header text
+  rect(g, SIDEBAR_W+8, CHROME_H+6, 36, 6, 'rgba(0,0,0,0.06)');
+  rect(g, SIDEBAR_W+8, CHROME_H+14, 16, 4, 'rgba(0,0,0,0.04)');
+  // Search bar in header
+  roundRect(g, SW-80, CHROME_H+5, 60, 12, 6, 'rgba(0,0,0,0.04)', 'none');
+
+  // Content area
+  const cx = CX;
+  let cy = CONTENT_TOP;
+  if (s.draw) s.draw(g, {x: cx, y: cy});
+
+  // Label below screen
+  txt(g, SW/2, SH+22, s.name, 13, '#1C1A17', 600, 'middle');
+  // Type dot
+  g.append('circle').attr('cx', SW/2 - s.name.length*3.8 - 6).attr('cy', SH+18).attr('r',4).attr('fill',c.accent).attr('opacity',0.5);
+
+  // Hover
+  g.on('mouseenter', function() {
+    d3.select(this).select('.frame').attr('stroke-width',2.5).attr('filter','url(#shd-h)');
+  }).on('mouseleave', function() {
+    d3.select(this).select('.frame').attr('stroke-width',1.5).attr('filter','url(#shd)');
+  }).on('click', function(e) { e.stopPropagation(); openPanel(s); });
+}
+
+function drawDiamond(parent, s) {
+  const c = COLORS.decision;
+  const g = parent.append('g').attr('class','screen-group').datum(s)
+    .attr('transform',`translate(${s.x},${s.y})`).style('cursor','pointer');
+  const R = DECISION_R;
+  g.append('polygon').attr('class','frame')
+    .attr('points',`0,${-R} ${R},0 0,${R} ${-R},0`)
+    .attr('fill',c.bg).attr('stroke',c.border).attr('stroke-width',2).attr('filter','url(#shd)');
+  txt(g,0,4,'?',24,c.accent,700,'middle');
+  txt(g,0,R+20,s.name,12,'#1C1A17',600,'middle');
+
+  g.on('mouseenter', function() {
+    d3.select(this).select('.frame').attr('stroke-width',3).attr('filter','url(#shd-h)');
+  }).on('mouseleave', function() {
+    d3.select(this).select('.frame').attr('stroke-width',2).attr('filter','url(#shd)');
+  }).on('click', function(e) { e.stopPropagation(); openPanel(s); });
+}
+
+// ════════════════════════════════════════════
+//  CONNECTORS
+// ════════════════════════════════════════════
+function getEdge(s, side) {
+  if (s.type === 'decision') {
+    const R = DECISION_R;
+    switch(side) {
+      case 'right':  return {x: s.x+R, y: s.y};
+      case 'left':   return {x: s.x-R, y: s.y};
+      case 'bottom': return {x: s.x, y: s.y+R};
+      case 'top':    return {x: s.x, y: s.y-R};
+    }
+  }
+  switch(side) {
+    case 'right':  return {x: s.x+SW, y: s.y+SH/2};
+    case 'left':   return {x: s.x, y: s.y+SH/2};
+    case 'bottom': return {x: s.x+SW/2, y: s.y+SH};
+    case 'top':    return {x: s.x+SW/2, y: s.y};
+  }
+}
+
+function connStyle(action) {
+  const a = action.toLowerCase();
+  if (a.includes('fail') || a.includes('error') || a.includes('denied') || a.includes('timeout') || a.includes('network') || a.includes('auth'))
+    return {c:'#C62828', d:'6,3', m:'url(#arr-err)'};
+  if (a.includes('success') || a.includes('continue') || a.includes('save') || a.includes('complete') || a.includes('authorized') || a.includes('scan comp'))
+    return {c:'#558B2F', d:'none', m:'url(#arr-ok)'};
+  if (a.includes('back') || a.includes('cancel') || a.includes('dismiss') || a.includes('re-test') || a.includes('retry') || a.includes('fix') || a.includes('manual'))
+    return {c:'#B0ABA2', d:'4,3', m:'url(#arr-back)'};
+  return {c:'#013D5B', d:'none', m:'url(#arr)'};
+}
+
+// Explicit routing table to avoid overlaps
+const ROUTES = {
+  // ── Happy path (Row 0, left to right) ──
+  'list->add-conn':              {exit:'right', enter:'left'},
+  'add-conn->test-decision':     {exit:'right', enter:'left'},
+  'test-decision->test-success': {exit:'right', enter:'left'},
+  'test-success->schemas':       {exit:'right', enter:'left'},
+  'schemas->detail':             {exit:'right', enter:'left'},
+  // Happy path back-loops (over the top)
+  'add-conn->list':              {exit:'top', enter:'top'},
+  'schemas->add-conn':           {exit:'top', enter:'top'},
+  'test-success->test-decision': {exit:'top', enter:'top'},
+  // Happy path down to Row 2
+  'schemas->detail-scanning':    {exit:'bottom', enter:'top'},
+  'detail->detail-scanning':     {exit:'bottom', enter:'top'},
+
+  // ── Decision to errors (Row 0 down to Row 1) ──
+  'test-decision->err-auth':     {exit:'bottom', enter:'top'},
+  'test-decision->err-network':  {exit:'bottom', enter:'top'},
+  'test-decision->err-timeout':  {exit:'bottom', enter:'top'},
+  'add-conn->oauth-decision':    {exit:'bottom', enter:'top'},
+
+  // ── Error recovery (Row 1 back up to Row 0) ──
+  'err-auth->test-decision':     {exit:'top', enter:'bottom'},
+  'err-network->test-decision':  {exit:'top', enter:'bottom'},
+  'err-timeout->test-decision':  {exit:'top', enter:'bottom'},
+
+  // ── OAuth branch (within Row 1) ──
+  'oauth-decision->schemas':     {exit:'right', enter:'bottom'},
+  'oauth-decision->err-oauth':   {exit:'left', enter:'right'},
+  'err-oauth->oauth-decision':   {exit:'right', enter:'left'},
+  'err-oauth->add-conn':         {exit:'top', enter:'bottom'},
+
+  // ── Row 2 additional states ──
+  'empty->add-conn':             {exit:'top', enter:'bottom'},
+  'detail-scanning->detail':     {exit:'top', enter:'bottom'},
+  'detail->reconnect':           {exit:'bottom', enter:'top'},
+  'reconnect->test-decision':    {exit:'top', enter:'bottom'},
+  'reconnect->detail':           {exit:'left', enter:'bottom'},
+  'degraded->reconnect':         {exit:'right', enter:'left'},
+  'degraded->detail':            {exit:'top', enter:'bottom'},
+};
+
+// ── Safe gutter routing ──
+// Column gutters: vertical corridors between columns that are clear at ALL rows.
+// Screens at col(n) span x:[col(n), col(n)+SW]. Gutters are centered between.
+const SAFE_GUTTERS_X = [];
+for (let i = 0; i < 6; i++) SAFE_GUTTERS_X.push(col(i) + SW + (COL_W - SW) / 2);
+SAFE_GUTTERS_X.unshift(col(0) - (COL_W - SW) / 2); // left edge gutter
+// Row gutters: horizontal corridors between rows
+function rowGutter(n) { return row(n) + SH + (ROW_H - SH) / 2; }
+
+function nearestSafeGutterX(x) {
+  let best = SAFE_GUTTERS_X[0], bestD = Math.abs(x - best);
+  SAFE_GUTTERS_X.forEach(gx => { const d = Math.abs(x - gx); if (d < bestD) { best = gx; bestD = d; } });
+  return best;
+}
+
+function whichRow(y) { return y < row(1) ? 0 : y < row(2) ? 1 : 2; }
+
+// Lane offsets by connector style to separate overlapping arrows
+function laneOffset(style) {
+  if (style.c === '#013D5B') return 0;      // primary (blue)
+  if (style.c === '#558B2F') return -16;     // success (green)
+  if (style.c === '#C62828') return 16;      // error (red)
+  if (style.c === '#B0ABA2') return 32;      // back/retry (gray)
+  return 0;
+}
+
+function buildPath(key, es, en, a, b, off) {
+  // Same-row horizontal
+  if (es === 'right' && en === 'left') {
+    const mx = (a.x + b.x) / 2;
+    return `M${a.x},${a.y} H${mx} V${b.y} H${b.x}`;
+  }
+
+  // Back-loops over the top (same row)
+  if (es === 'top' && en === 'top') {
+    const topY = Math.min(a.y, b.y) - 70 + off;
+    return `M${a.x},${a.y} V${topY} H${b.x} V${b.y}`;
+  }
+
+  // Cross-row connectors: route vertical legs through safe column gutters
+  if (es === 'bottom' && en === 'top') {
+    const gx = nearestSafeGutterX((a.x + b.x) / 2) + off;
+    return `M${a.x},${a.y} V${a.y + 30} H${gx} V${b.y - 30} H${b.x} V${b.y}`;
+  }
+  if (es === 'top' && en === 'bottom') {
+    const gx = nearestSafeGutterX((a.x + b.x) / 2) + off;
+    return `M${a.x},${a.y} V${a.y - 30} H${gx} V${b.y + 30} H${b.x} V${b.y}`;
+  }
+
+  // Right to bottom (for OAuth→schemas which goes across + down)
+  if (es === 'right' && en === 'bottom') {
+    const gx = nearestSafeGutterX(b.x) + off;
+    return `M${a.x},${a.y} H${gx} V${b.y + 30} H${b.x} V${b.y}`;
+  }
+
+  // Left to right across columns
+  if (es === 'left' && en === 'right') {
+    const mx = (a.x + b.x) / 2;
+    return `M${a.x},${a.y} H${mx} V${b.y} H${b.x}`;
+  }
+  // Left to bottom
+  if (es === 'left' && en === 'bottom') {
+    const gx = nearestSafeGutterX(a.x) + off;
+    return `M${a.x},${a.y} H${gx} V${b.y + 30} H${b.x} V${b.y}`;
+  }
+
+  // Fallback
+  return `M${a.x},${a.y} L${b.x},${b.y}`;
+}
+
+// Find a good pill position on the path that does NOT overlap any screen
+function getPillPosition(pathStr, a, b, labelText) {
+  const parts = pathStr.split(/(?=[MHVL])/).filter(p => p.length > 1);
+  let cx = 0, cy = 0;
+  const segs = [];
+  parts.forEach(p => {
+    const cmd = p[0], rest = p.substring(1);
+    if (cmd === 'M') { const [x,y] = rest.split(',').map(Number); cx=x; cy=y; }
+    else if (cmd === 'H') { const x=Number(rest); segs.push({x1:cx,y1:cy,x2:x,y2:cy,len:Math.abs(x-cx)}); cx=x; }
+    else if (cmd === 'V') { const y=Number(rest); segs.push({x1:cx,y1:cy,x2:cx,y2:y,len:Math.abs(y-cy)}); cy=y; }
+    else if (cmd === 'L') { const [x,y]=rest.split(',').map(Number); segs.push({x1:cx,y1:cy,x2:x,y2:y,len:Math.hypot(x-cx,y-cy)}); cx=x;cy=y; }
+  });
+  if (segs.length === 0) return {x:(a.x+b.x)/2, y:(a.y+b.y)/2};
+
+  // Build screen bounding boxes (with generous padding)
+  const screenBoxes = screens.map(s => {
+    if (s.type === 'decision') {
+      const R = DECISION_R;
+      return {x: s.x - R, y: s.y - R, w: R*2, h: R*2};
+    }
+    return {x: s.x, y: s.y, w: SW, h: SH + 40}; // +40 for label below screen
+  });
+
+  const pillW = (labelText||'').length * 5 + 28; // pill width estimate
+  const pillH = 24;
+
+  function overlapsAnyScreen(px, py) {
+    return screenBoxes.some(box =>
+      px - pillW/2 < box.x + box.w + 8 && px + pillW/2 > box.x - 8 &&
+      py - pillH/2 < box.y + box.h + 8 && py + pillH/2 > box.y - 8
+    );
+  }
+
+  // Sort segments by length descending, try midpoint of each
+  const sorted = [...segs].sort((a,b) => b.len - a.len);
+  for (const seg of sorted) {
+    const mx = (seg.x1 + seg.x2) / 2;
+    const my = (seg.y1 + seg.y2) / 2;
+    if (!overlapsAnyScreen(mx, my)) return {x: mx, y: my};
+  }
+
+  // Try quarter/three-quarter points on each segment
+  for (const seg of sorted) {
+    for (const t of [0.25, 0.75, 0.15, 0.85]) {
+      const px = seg.x1 + (seg.x2 - seg.x1) * t;
+      const py = seg.y1 + (seg.y2 - seg.y1) * t;
+      if (!overlapsAnyScreen(px, py)) return {x: px, y: py};
+    }
+  }
+
+  // Last resort: pick the longest segment midpoint (better than nothing)
+  const longest = segs.reduce((a,b) => a.len > b.len ? a : b);
+  return {x: (longest.x1+longest.x2)/2, y: (longest.y1+longest.y2)/2};
+}
+
+// Collect pill positions so we can draw them in a top layer after screens
+const pendingPills = [];
+
+function drawConnectors() {
+  const cg = container.append('g').attr('class','connectors');
+
+  screens.forEach(src => {
+    (src.exits||[]).forEach(exit => {
+      const tgt = screens.find(s => s.id === exit.target);
+      if (!tgt) return;
+
+      const key = src.id + '->' + tgt.id;
+      const route = ROUTES[key];
+      if (!route) return;
+
+      const style = connStyle(exit.action);
+      const layer = (src.layer==='error'||tgt.layer==='error') ? 'error' : 'happy';
+      const g = cg.append('g').attr('class','connector-group').datum({layer});
+
+      const off = laneOffset(style);
+      const a = getEdge(src, route.exit);
+      const b = getEdge(tgt, route.enter);
+
+      // Offset exit/entry points perpendicular to edge to separate parallel connectors
+      if (route.exit === 'top' || route.exit === 'bottom') a.x += off * 0.6;
+      if (route.exit === 'left' || route.exit === 'right') a.y += off * 0.6;
+      if (route.enter === 'top' || route.enter === 'bottom') b.x += off * 0.6;
+      if (route.enter === 'left' || route.enter === 'right') b.y += off * 0.6;
+
+      // Build orthogonal path, routing through column gutters with lane offset
+      const path = buildPath(key, route.exit, route.enter, a, b, off);
+
+      g.append('path').attr('d',path)
+        .attr('stroke',style.c).attr('stroke-width',1.5).attr('fill','none')
+        .attr('stroke-dasharray',style.d).attr('marker-end',style.m);
+
+      // Port dots
+      g.append('circle').attr('cx',a.x).attr('cy',a.y).attr('r',4).attr('fill',style.c).attr('stroke','white').attr('stroke-width',2);
+      g.append('circle').attr('cx',b.x).attr('cy',b.y).attr('r',4).attr('fill',style.c).attr('stroke','white').attr('stroke-width',2);
+
+      // Pill position: place on a safe segment of the path (avoid screen overlap)
+      const pillPos = getPillPosition(path, a, b, exit.action);
+      pendingPills.push({x:pillPos.x, y:pillPos.y, label:exit.action, color:style.c, layer});
+    });
+  });
+}
+
+// Resolve pill-vs-pill collisions so no two pills overlap
+function resolvePillCollisions() {
+  const pillH = 22;
+  function pillW(p) { return p.label.length * 5 + 18; }
+
+  // Multiple passes to resolve cascading collisions
+  for (let pass = 0; pass < 8; pass++) {
+    let moved = false;
+    for (let i = 0; i < pendingPills.length; i++) {
+      const pi = pendingPills[i];
+      const wi = pillW(pi);
+      for (let j = i + 1; j < pendingPills.length; j++) {
+        const pj = pendingPills[j];
+        const wj = pillW(pj);
+        const overlapX = (wi + wj) / 2 + 6 - Math.abs(pi.x - pj.x);
+        const overlapY = pillH + 4 - Math.abs(pi.y - pj.y);
+        if (overlapX > 0 && overlapY > 0) {
+          // Push apart vertically
+          const shift = (pillH + 6) / 2;
+          if (pi.y <= pj.y) { pi.y -= shift; pj.y += shift; }
+          else { pi.y += shift; pj.y -= shift; }
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
+  // Also resolve pill-vs-screen overlaps one more time after collision shifts
+  const screenBoxes = screens.map(s => {
+    if (s.type === 'decision') {
+      const R = DECISION_R;
+      return {x: s.x - R, y: s.y - R, w: R*2, h: R*2};
+    }
+    return {x: s.x, y: s.y, w: SW, h: SH + 40};
+  });
+
+  pendingPills.forEach(p => {
+    const pw = pillW(p);
+    for (const box of screenBoxes) {
+      if (p.x - pw/2 < box.x + box.w + 8 && p.x + pw/2 > box.x - 8 &&
+          p.y - pillH/2 < box.y + box.h + 8 && p.y + pillH/2 > box.y - 8) {
+        // Push pill above or below the screen
+        const aboveDist = Math.abs(p.y - (box.y - pillH/2 - 10));
+        const belowDist = Math.abs(p.y - (box.y + box.h + pillH/2 + 10));
+        if (aboveDist < belowDist) p.y = box.y - pillH/2 - 10;
+        else p.y = box.y + box.h + pillH/2 + 10;
+      }
+    }
+  });
+}
+
+// Draw all action pills in a top-most layer (above screens)
+function drawPillsLayer() {
+  resolvePillCollisions();
+  const pg = container.append('g').attr('class','pill-labels');
+  pendingPills.forEach(p => {
+    const g = pg.append('g').attr('class','connector-group').datum({layer:p.layer});
+    const ig = g.append('g').attr('transform',`translate(${p.x},${p.y})`);
+    const w = p.label.length*5+18;
+    roundRect(ig,-w/2,-10,w,20,10,p.color,'none');
+    txt(ig,0,4,p.label,9,'#FFF',500,'middle');
+  });
+}
+
+// ════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════
+drawConnectors();                                   // 1. Lines & dots (bottom layer)
+const screenLayer = container.append('g');
+screens.forEach(s => drawScreen(screenLayer, s));   // 2. Screen wireframes (middle layer)
+drawPillsLayer();                                    // 3. Action pill labels (top layer)
+
+// ════════════════════════════════════════════
+//  LAYER TOGGLE
+// ════════════════════════════════════════════
+const layerOn = {happy:true, error:true};
+function toggleLayer(l) {
+  layerOn[l] = !layerOn[l];
+  document.getElementById(l==='happy'?'btn-happy':'btn-error').classList.toggle('active',layerOn[l]);
+  container.selectAll('.screen-group').each(function() {
+    const d = d3.select(this).datum();
+    d3.select(this).transition().duration(200).style('opacity',layerOn[d.layer]?1:0.06).style('pointer-events',layerOn[d.layer]?'all':'none');
+  });
+  container.selectAll('.connector-group').each(function() {
+    const d = d3.select(this).datum();
+    d3.select(this).transition().duration(200).style('opacity',layerOn[d.layer]?1:0.04);
+  });
+}
+
+// ════════════════════════════════════════════
+//  DETAIL PANEL
+// ════════════════════════════════════════════
+function openPanel(s) {
+  document.getElementById('panel-name').textContent = s.name;
+  const te = document.getElementById('panel-type');
+  te.textContent = {screen:'Screen',decision:'Decision Point',error:'Error State',success:'Success State'}[s.type]||s.type;
+  te.className = 'badge '+s.type;
+
+  const pDiv = document.getElementById('panel-personas');
+  pDiv.innerHTML = '';
+  (s.personas||[]).forEach(p => {
+    const t = document.createElement('span');
+    t.className = 'persona-tag '+p;
+    t.textContent = {jordan:'Jordan (Engineer)',priya:'Priya (Governance)',marcus:'Marcus (Executive)'}[p]||p;
+    pDiv.appendChild(t);
+  });
+
+  document.getElementById('panel-desc').textContent = s.desc||'';
+
+  const el = document.getElementById('panel-elements');
+  el.innerHTML = '';
+  if (s.type === 'decision') {
+    const li = document.createElement('li');
+    li.innerHTML = '<span style="color:#6B6760;font-size:11px">[decision]</span> Branching point — system evaluates result';
+    el.appendChild(li);
+  }
+
+  const ex = document.getElementById('panel-exits');
+  ex.innerHTML = '';
+  (s.exits||[]).forEach(exit => {
+    const tgt = screens.find(sc => sc.id === exit.target);
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="exit-action">${exit.action}</span> <span style="color:#B0ABA2;margin:0 4px">\u2192</span> <span class="exit-target">${tgt?tgt.name:exit.target}</span>`;
+    ex.appendChild(li);
+  });
+
+  document.getElementById('detail-panel').classList.add('open');
+}
+function closePanel() { document.getElementById('detail-panel').classList.remove('open'); }
+svg.on('click', closePanel);
+
+// ════════════════════════════════════════════
+//  FIT VIEW
+// ════════════════════════════════════════════
+function fitToContent() {
+  const b = container.node().getBBox();
+  if (!b.width || !b.height) return;
+  const pad = 120;
+  const scale = Math.min(W/(b.width+pad*2), H/(b.height+pad*2), 1);
+  const tx = (W-b.width*scale)/2 - b.x*scale;
+  const ty = (H-b.height*scale)/2 - b.y*scale;
+  svg.transition().duration(600).call(zoomBehavior.transform, d3.zoomIdentity.translate(tx,ty).scale(scale));
+}
+fitToContent();
+
+svg.on('dblclick.zoom', null);
+svg.on('dblclick', fitToContent);
+
+document.addEventListener('keydown', e => {
+  if (e.key==='ArrowLeft')  svg.call(zoomBehavior.translateBy, 60,0);
+  if (e.key==='ArrowRight') svg.call(zoomBehavior.translateBy,-60,0);
+  if (e.key==='ArrowUp')    svg.call(zoomBehavior.translateBy,0,60);
+  if (e.key==='ArrowDown')  svg.call(zoomBehavior.translateBy,0,-60);
+  if (e.key==='+'||e.key==='=') svg.call(zoomBehavior.scaleBy,1.2);
+  if (e.key==='-') svg.call(zoomBehavior.scaleBy,0.8);
+  if (e.key==='Escape') closePanel();
+});
+
+window.addEventListener('resize', () => {
+  W = window.innerWidth; H = window.innerHeight-56;
+  svg.attr('width',W).attr('height',H);
+  fitToContent();
+});
+</script>
+</body>
+</html>

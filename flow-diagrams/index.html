@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Data Security Platform — UX Flow Diagrams</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #FAF8F5;
+      color: #1C1A17;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 80px 40px 60px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1C1A17;
+      margin-bottom: 8px;
+    }
+    .header p {
+      font-size: 16px;
+      color: #666;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .stage-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #999;
+      margin-bottom: 16px;
+      padding-left: 4px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto 48px;
+    }
+    .card {
+      background: #FFFFFF;
+      border: 1px solid #E0DCD3;
+      border-radius: 12px;
+      padding: 28px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .card:hover {
+      border-color: #013D5B;
+      box-shadow: 0 4px 20px rgba(1, 61, 91, 0.08);
+      transform: translateY(-2px);
+    }
+    .card .flow-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .card .top-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .card h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .card .description {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.5;
+    }
+    .card .meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: auto;
+    }
+    .card .tag {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: #F5F3F0;
+      color: #666;
+    }
+    .card .tag.persona { background: #C1DDE3; color: #333; }
+    .card .tag.stage { background: #E2EDCC; color: #333; }
+
+    /* Stage colors for flow numbers */
+    .discover { background: #C1DDE3; color: #333; }
+    .classify { background: #E2EDCC; color: #333; }
+    .assess { background: #FCF5B1; color: #333; }
+    .remediate { background: #EEA79E; color: #333; }
+    .track { background: #C39DE3; color: #333; }
+    .all { background: #40454A; color: #FFF; }
+
+    .pipeline {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 48px;
+      flex-wrap: wrap;
+    }
+    .pipeline .stage {
+      padding: 10px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: relative;
+    }
+    .pipeline .stage:not(:last-child)::after {
+      content: '>';
+      position: absolute;
+      right: -4px;
+      color: #CCC;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Data Security Platform</h1>
+    <p>7 interactive UX flow diagrams covering the complete five-stage security loop: Discover, Classify, Assess, Remediate, Track</p>
+  </div>
+
+  <div class="pipeline">
+    <div class="stage discover">Discover</div>
+    <div class="stage classify">Classify</div>
+    <div class="stage assess">Assess</div>
+    <div class="stage remediate">Remediate</div>
+    <div class="stage track">Track</div>
+  </div>
+
+  <div class="grid">
+    <a class="card" href="flow-1-data-source-connections.html">
+      <div class="top-row">
+        <div class="flow-num discover">1</div>
+        <h2>Data Source Connections</h2>
+      </div>
+      <div class="description">Connect external data platforms so the system can scan and ingest metadata. OAuth quick-connect, schema selection, connection health monitoring.</div>
+      <div class="meta">
+        <span class="tag stage">Discover</span>
+        <span class="tag persona">Jordan</span>
+        <span class="tag">4 screens</span>
+      </div>
+    </a>
+
+    <a class="card" href="flow-2-scanning-classification.html">
+      <div class="top-row">
+        <div class="flow-num classify">2</div>
+        <h2>Scanning & Classification</h2>
+      </div>
+      <div class="description">Scan connected sources, ingest metadata, and classify sensitive data. Two-phase flow: Jordan scans, Priya reviews with guided semi-automatic classification.</div>
+      <div class="meta">
+        <span class="tag stage">Discover + Classify</span>
+        <span class="tag persona">Jordan + Priya</span>
+        <span class="tag">10 screens</span>
+      </div>
+    </a>
+
+    <a class="card" href="flow-3-risk-assessment.html">
+      <div class="top-row">
+        <div class="flow-num assess">3</div>
+        <h2>Risk Assessment & Scoring</h2>
+      </div>
+      <div class="description">Evaluate risk based on sensitive data exposure, access patterns, and regulation requirements. Persona-specific views, risk simulation, snooze with accountability.</div>
+      <div class="meta">
+        <span class="tag stage">Assess</span>
+        <span class="tag persona">Marcus + Priya + Jordan</span>
+        <span class="tag">4 screens</span>
+      </div>
+    </a>
+
+    <a class="card" href="flow-4-remediation.html">
+      <div class="top-row">
+        <div class="flow-num remediate">4</div>
+        <h2>Remediation</h2>
+      </div>
+      <div class="description">Apply fixes to reduce risk — tokenize, revoke access, delete data, or apply policies. 3-step pattern with dry-run, approval workflow, rollback, and batch execution.</div>
+      <div class="meta">
+        <span class="tag stage">Remediate</span>
+        <span class="tag persona">Priya + Jordan</span>
+        <span class="tag">11 screens</span>
+      </div>
+    </a>
+
+    <a class="card" href="flow-5-tokenization-policies.html">
+      <div class="top-row">
+        <div class="flow-num remediate">5</div>
+        <h2>Tokenization Policies</h2>
+      </div>
+      <div class="description">Define and manage reusable tokenization policies. Template gallery, regulation-aware defaults, policy versioning, impact preview, inline creation from remediation.</div>
+      <div class="meta">
+        <span class="tag stage">Remediate (infra)</span>
+        <span class="tag persona">Priya + Jordan</span>
+        <span class="tag">8 screens</span>
+      </div>
+    </a>
+
+    <a class="card" href="flow-6-dashboard-monitoring.html">
+      <div class="top-row">
+        <div class="flow-num track">6</div>
+        <h2>Dashboard & Monitoring</h2>
+      </div>
+      <div class="description">At-a-glance risk visibility with trends, drill-downs, and alerts. Three persona views, persistent alert ribbon, universal search (Cmd+K), scheduled reports.</div>
+      <div class="meta">
+        <span class="tag stage">Track</span>
+        <span class="tag persona">Marcus + Priya + Jordan</span>
+        <span class="tag">6 screens</span>
+      </div>
+    </a>
+
+    <a class="card" href="flow-7-onboarding.html">
+      <div class="top-row">
+        <div class="flow-num all">7</div>
+        <h2>Onboarding & First-Time Experience</h2>
+      </div>
+      <div class="description">Sign-up to first risk score in 30 minutes. Persona selection, guided 5-step setup, Marcus interactive demo, celebration moments, progressive disclosure.</div>
+      <div class="meta">
+        <span class="tag stage">All Stages</span>
+        <span class="tag persona">Jordan + Priya + Marcus</span>
+        <span class="tag">10 screens</span>
+      </div>
+    </a>
+  </div>
+</body>
+</html>

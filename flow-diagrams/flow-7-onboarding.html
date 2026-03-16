@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flow 7: Onboarding & First-Time Experience — Interactive Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #FAF8F5;
+      color: #1C1A17;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    #header {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 48px;
+      background: #FFFFFF;
+      border-bottom: 1px solid #E0DCD3;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+      z-index: 100;
+      font-family: Inter, sans-serif;
+    }
+    #header .title {
+      font-size: 15px; font-weight: 600; color: #1C1A17;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    #header .controls {
+      display: flex; gap: 4px;
+    }
+    #header .controls button {
+      width: 32px; height: 32px; border: 1px solid #E0DCD3;
+      background: #FFFFFF; border-radius: 6px; cursor: pointer;
+      font-size: 16px; color: #333; display: flex; align-items: center; justify-content: center;
+    }
+    #header .controls button:hover { background: #F5F3F0; }
+    #flow-svg { display: block; }
+    .node { cursor: pointer; }
+    .node:hover rect, .node:hover circle { filter: brightness(0.97); }
+    .node:hover { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.1)); }
+
+    /* Sidebar */
+    #sidebar {
+      position: fixed; top: 48px; right: -380px; bottom: 0; width: 380px;
+      background: #FFFFFF; border-left: 1px solid #E0DCD3;
+      z-index: 90; transition: right 0.3s ease;
+      overflow-y: auto; padding: 32px 24px;
+      font-family: Inter, sans-serif;
+    }
+    #sidebar.open { right: 0; }
+    #sidebar .close-btn {
+      position: absolute; top: 16px; right: 16px; width: 28px; height: 28px;
+      border: none; background: none; cursor: pointer; font-size: 20px; color: #999;
+    }
+    #sidebar .close-btn:hover { color: #333; }
+    #sidebar .node-type-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 12px;
+    }
+    #sidebar h2 { font-size: 20px; font-weight: 600; color: #1C1A17; margin-bottom: 20px; }
+    #sidebar .section { margin-bottom: 20px; }
+    #sidebar .section-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.5px; color: #999; margin-bottom: 6px;
+    }
+    #sidebar .section-content { font-size: 14px; color: #333; line-height: 1.6; }
+    #sidebar .exit-list { list-style: none; padding: 0; }
+    #sidebar .exit-list li {
+      padding: 6px 0; border-bottom: 1px solid #F0EDE8;
+      font-size: 13px; color: #333;
+    }
+    #sidebar .exit-list li strong { color: #013D5B; }
+
+    /* Edge label pills */
+    .edge-label-bg { fill: #FFFFFF; rx: 4; opacity: 0.95; }
+    .edge-label-text { font-size: 12px; fill: #666666; font-family: Inter, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <div class="title" id="flow-title"></div>
+    <div class="controls">
+      <button onclick="zoomIn()" title="Zoom in">+</button>
+      <button onclick="zoomOut()" title="Zoom out">−</button>
+      <button onclick="fitAll()" title="Fit all">⊡</button>
+    </div>
+  </div>
+  <svg id="flow-svg"></svg>
+  <div id="sidebar">
+    <button class="close-btn" onclick="closeSidebar()">✕</button>
+    <div id="sidebar-content"></div>
+  </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  FLOW DATA — MODIFY THIS SECTION ONLY
+//  Flow 7: Onboarding & First-Time Experience
+//  Goal: New user from sign-up to first risk score in 30 minutes.
+// ═══════════════════════════════════════════════════════════════
+const flowData = {
+  title: "Flow 7: Onboarding & First-Time Experience",
+  nodes: [
+    // Entry
+    { id: "signup-complete", type: "start", label: "Sign Up Complete", description: "User has completed account registration. This is the entry point to the onboarding flow." },
+    { id: "welcome-screen", type: "process", label: "Welcome Screen", description: "Branded welcome screen introducing the Data Management Platform. Sets expectations for the 30-minute onboarding goal.", userAction: "User reads welcome content and proceeds" },
+
+    // User type decision
+    { id: "user-type", type: "user-decision", label: "User Type?", description: "User self-selects their experience level to determine onboarding depth." },
+    { id: "skip-dashboard", type: "alt-flow", label: "Full Dashboard", description: "Expert users skip guided setup and land on the full dashboard with a dismissible checklist widget for optional onboarding steps.", userAction: "Expert user skips onboarding" },
+
+    // Persona selection
+    { id: "persona-select", type: "process", label: "Persona Selection", description: "User selects their role to personalize the dashboard layout and onboarding content. Options: Engineer, Governance, or Executive.", userAction: "User picks their role from three persona cards" },
+    { id: "persona-choice", type: "user-decision", label: "Persona?", description: "Routing based on selected persona to customize the initial dashboard view." },
+
+    // Persona-specific dashboards
+    { id: "dash-operations", type: "process", label: "Dashboard\nOperations View", description: "Jordan (Engineer) persona dashboard. Focused on data sources, scan status, and technical operations. Includes progress tracker for onboarding.", userAction: "Jordan reviews the operations-focused layout" },
+    { id: "dash-governance", type: "process", label: "Dashboard\nGovernance View", description: "Priya (Governance) persona dashboard. Focused on policies, compliance status, and classification review. Includes progress tracker for onboarding.", userAction: "Priya reviews the governance-focused layout" },
+    { id: "dash-executive", type: "process", label: "Dashboard\nExecutive View", description: "Marcus (Executive) persona dashboard. High-level risk overview, team metrics, and strategic insights.", userAction: "Marcus reviews the executive-focused layout" },
+
+    // Marcus executive path
+    { id: "marcus-path", type: "user-decision", label: "Marcus\nPath?", description: "Executive users choose between an interactive demo with sample data or proceeding directly to guided setup." },
+    { id: "marcus-demo", type: "alt-flow", label: "Interactive Demo\n(Sample Data)", description: "Pre-loaded sample data environment allowing Marcus to explore risk scores, dashboards, and reports without connecting real data sources.", userAction: "Marcus explores sample dashboards and reports" },
+    { id: "demo-complete", type: "confirmation", label: "Demo Complete", description: "Marcus has finished exploring the interactive demo and is prompted to take a next action." },
+    { id: "demo-action", type: "user-decision", label: "Action?", description: "After the demo, Marcus chooses next steps: connect own data, invite team members, explore more features, or proceed to full setup." },
+    { id: "invite-team-alt", type: "alt-flow", label: "Invite Team", description: "Marcus invites Jordan and Priya to the platform, enabling persona handoff. Sends email invitations with role-based onboarding links.", userAction: "Marcus enters team email addresses and assigns roles" },
+    { id: "explore-more", type: "alt-flow", label: "Explore More", description: "Marcus continues exploring additional platform features and reports before committing to setup.", userAction: "Marcus browses additional sections" },
+
+    // Onboarding dashboard (convergence point)
+    { id: "onboarding-dash", type: "process", label: "Onboarding Dashboard\n(Progress Tracker)", description: "Central onboarding hub showing 0 of 5 steps completed. Visual progress bar, estimated time remaining, and step-by-step checklist. Serves as home base throughout guided setup.", edgeCases: ["User may navigate away and return", "Progress persists across sessions"] },
+
+    // Step 1: Connect data source
+    { id: "step1-connect", type: "process", label: "Step 1: Connect Your\nFirst Data Source", description: "Platform quick-select grid showing supported data sources: Snowflake, AWS, Databricks, BigQuery. User picks their primary data platform.", userAction: "User selects their data platform from the quick-select grid" },
+    { id: "oauth-check", type: "decision", label: "OAuth\nAvailable?", description: "System checks whether the selected platform supports OAuth-based one-click authentication or requires manual credential entry." },
+    { id: "oauth-connect", type: "process", label: "One-Click OAuth", description: "Streamlined OAuth flow. User authorizes access through the data platform's consent screen. Credentials are securely stored.", userAction: "User clicks authorize and completes OAuth consent" },
+    { id: "credential-form", type: "process", label: "Guided Credential\nForm", description: "Step-by-step credential entry with inline help, validation, and links to documentation for finding credentials in each platform.", userAction: "User enters host, credentials, and connection details", edgeCases: ["User may not have admin credentials", "Firewall rules may need updating"] },
+    { id: "connection-test", type: "decision", label: "Connection\nSuccess?", description: "System tests the connection by attempting to list schemas and tables. Validates network access, authentication, and permissions." },
+    { id: "step1-complete", type: "confirmation", label: "Step 1 Complete", description: "Connection successful. Celebration micro-animation (checkmark with confetti burst). Shows number of schemas and tables discovered.", userAction: "User acknowledges success and proceeds" },
+    { id: "troubleshoot", type: "error", label: "Troubleshooting\nGuide", description: "Context-aware troubleshooting with common fixes: firewall allowlisting, credential permissions, network connectivity. Includes copy-paste commands and direct links to platform docs.", userAction: "User follows troubleshooting steps and retries", edgeCases: ["User may need to contact IT admin", "VPN configuration issues"] },
+
+    // Step 2: Run first scan
+    { id: "step2-scan", type: "process", label: "Step 2: Run First\nScan (Auto-Triggered)", description: "Discovery scan begins automatically after successful connection. Scans metadata, samples data, and identifies column types. Educational tooltips explain what the scan is doing.", userAction: "User watches scan progress with educational content" },
+    { id: "scan-size", type: "decision", label: "Scan\nSize?", description: "System evaluates the scope of the connected data source to determine the appropriate progress display." },
+    { id: "scan-progress", type: "process", label: "Scan Progress\n(Stay on Page)", description: "For small datasets (<100 tables), user stays on the progress screen. Real-time updates with educational tooltips about data classification.", userAction: "User watches real-time scan progress" },
+    { id: "scan-background", type: "process", label: "Background Scan\nwith ETA", description: "For large datasets (100+ tables), scan moves to background. User sees estimated completion time and can explore other platform areas.", userAction: "User is free to explore while scan runs" },
+    { id: "step2-complete", type: "confirmation", label: "Step 2 Complete\n(Discovery Stats)", description: "Scan finished. Shows discovery statistics: total tables scanned, columns analyzed, data types found, and preliminary sensitivity indicators." },
+
+    // Step 3: Review classifications
+    { id: "step3-review", type: "process", label: "Step 3: Review First\nClassifications", description: "Guided review of the top 5 highest-confidence classifications. Coach marks highlight UI elements and explain classification confidence scores.", userAction: "User reviews and confirms or adjusts each classification" },
+    { id: "coach-marks", type: "process", label: "Coach Marks &\nUser Reviews", description: "Interactive walkthrough with coach marks pointing to key UI elements. User reviews each classification with approve/reject/reclassify options.", userAction: "User approves or adjusts 5 classifications", edgeCases: ["User disagrees with all classifications", "User is unsure about data sensitivity levels"] },
+    { id: "step3-complete", type: "confirmation", label: "Step 3 Complete", description: "Classification review finished. Summary shows accuracy rate of auto-classifications and how user feedback improves the model." },
+
+    // Step 4: See risk score
+    { id: "step4-risk", type: "process", label: "Step 4: See Your\nRisk Score", description: "The big moment. Calculating animation builds anticipation while the risk engine processes all discovered and classified data.", userAction: "User watches the risk calculation animation" },
+    { id: "score-revealed", type: "confirmation", label: "Risk Score Revealed\n(Animated Gauge)", description: "Animated gauge reveals the organization's first risk score (0-100). Color-coded display with score explanation, contributing factors breakdown, and comparison to industry benchmarks.", userAction: "User reads score explanation and contributing factors" },
+    { id: "step4-complete", type: "confirmation", label: "Step 4 Complete", description: "Risk score has been generated and explained. User understands their current data risk posture and what factors influence the score." },
+
+    // Step 5: Take first action
+    { id: "step5-action", type: "process", label: "Step 5: Take\nFirst Action", description: "Based on the risk score, the platform recommends an appropriate first action. Low-risk environments get monitoring setup; moderate-to-critical get guided remediation.", userAction: "User proceeds with the recommended action" },
+    { id: "risk-level", type: "decision", label: "Risk\nLevel?", description: "System evaluates the risk score to determine the appropriate first action path." },
+    { id: "monitoring-setup", type: "process", label: "Monitoring Setup", description: "For low-risk scores (0-25). Configure weekly re-scan schedule, set alert thresholds for score changes, and choose dashboard notification preferences.", userAction: "User configures re-scan frequency, alert thresholds, and dashboard preferences" },
+    { id: "guided-remediation", type: "process", label: "Guided Remediation", description: "For moderate-to-critical risk scores (26-100). Step-by-step guidance to address the highest-impact risk factors. Includes policy recommendations and access control suggestions.", userAction: "User follows remediation steps for top risk factors", edgeCases: ["Remediation may require permissions user doesn't have", "Some fixes need cross-team coordination"] },
+    { id: "score-updated", type: "confirmation", label: "Risk Score Updated", description: "After remediation actions, the risk score is recalculated and displayed. Shows improvement delta and remaining risk factors." },
+
+    // Onboarding complete
+    { id: "onboarding-complete", type: "end", label: "Onboarding Complete", description: "All 5 steps finished. Full dashboard revealed with confetti celebration animation. Dismissible checklist shows optional next steps: Invite team, Create policy, Schedule scans, Set up report." },
+
+    // Notes
+    { id: "note-goal", type: "note", label: "Goal: First risk score visible within 30 minutes" },
+    { id: "note-personas", type: "note", label: "Personas: Jordan (Engineer), Priya (Governance), Marcus (Executive)" }
+  ],
+  edges: [
+    // Entry flow
+    { from: "signup-complete", to: "welcome-screen", isHappyPath: true },
+    { from: "welcome-screen", to: "user-type", isHappyPath: true },
+
+    // User type branching
+    { from: "user-type", to: "persona-select", label: "Continue", isHappyPath: true },
+    { from: "user-type", to: "skip-dashboard", label: "Expert" },
+
+    // Persona selection
+    { from: "persona-select", to: "persona-choice", isHappyPath: true },
+    { from: "persona-choice", to: "dash-operations", label: "Jordan", isHappyPath: true },
+    { from: "persona-choice", to: "dash-governance", label: "Priya" },
+    { from: "persona-choice", to: "dash-executive", label: "Marcus" },
+
+    // Jordan/Priya to onboarding dashboard
+    { from: "dash-operations", to: "onboarding-dash", isHappyPath: true },
+    { from: "dash-governance", to: "onboarding-dash" },
+
+    // Marcus executive path
+    { from: "dash-executive", to: "marcus-path" },
+    { from: "marcus-path", to: "marcus-demo", label: "Demo" },
+    { from: "marcus-path", to: "onboarding-dash", label: "Full Setup" },
+    { from: "marcus-demo", to: "demo-complete" },
+    { from: "demo-complete", to: "demo-action" },
+    { from: "demo-action", to: "onboarding-dash", label: "Connect Data" },
+    { from: "demo-action", to: "invite-team-alt", label: "Invite" },
+    { from: "demo-action", to: "explore-more", label: "Explore" },
+    { from: "invite-team-alt", to: "onboarding-dash" },
+    { from: "explore-more", to: "onboarding-dash" },
+
+    // Step 1: Connect data source
+    { from: "onboarding-dash", to: "step1-connect", isHappyPath: true },
+    { from: "step1-connect", to: "oauth-check", isHappyPath: true },
+    { from: "oauth-check", to: "oauth-connect", label: "Yes", isHappyPath: true },
+    { from: "oauth-check", to: "credential-form", label: "No" },
+    { from: "oauth-connect", to: "connection-test", isHappyPath: true },
+    { from: "credential-form", to: "connection-test" },
+    { from: "connection-test", to: "step1-complete", label: "Success", isHappyPath: true },
+    { from: "connection-test", to: "troubleshoot", label: "Fail", isError: true },
+    { from: "troubleshoot", to: "connection-test", label: "Retry", isError: true },
+
+    // Step 2: Run first scan
+    { from: "step1-complete", to: "step2-scan", isHappyPath: true },
+    { from: "step2-scan", to: "scan-size", isHappyPath: true },
+    { from: "scan-size", to: "scan-progress", label: "<100 tables", isHappyPath: true },
+    { from: "scan-size", to: "scan-background", label: "100+ tables" },
+    { from: "scan-progress", to: "step2-complete", isHappyPath: true },
+    { from: "scan-background", to: "step2-complete" },
+
+    // Step 3: Review classifications
+    { from: "step2-complete", to: "step3-review", isHappyPath: true },
+    { from: "step3-review", to: "coach-marks", isHappyPath: true },
+    { from: "coach-marks", to: "step3-complete", isHappyPath: true },
+
+    // Step 4: Risk score
+    { from: "step3-complete", to: "step4-risk", isHappyPath: true },
+    { from: "step4-risk", to: "score-revealed", isHappyPath: true },
+    { from: "score-revealed", to: "step4-complete", isHappyPath: true },
+
+    // Step 5: Take first action
+    { from: "step4-complete", to: "step5-action", isHappyPath: true },
+    { from: "step5-action", to: "risk-level", isHappyPath: true },
+    { from: "risk-level", to: "monitoring-setup", label: "Low (0-25)", isHappyPath: true },
+    { from: "risk-level", to: "guided-remediation", label: "Moderate-Critical" },
+    { from: "monitoring-setup", to: "onboarding-complete", isHappyPath: true },
+    { from: "guided-remediation", to: "score-updated" },
+    { from: "score-updated", to: "onboarding-complete" }
+  ]
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  DO NOT MODIFY BELOW THIS LINE
+//  Rendering engine — handles layout, drawing, interactions.
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Node style definitions ───
+const NODE_STYLES = {
+  'start':         { fill: '#40454A', stroke: '#B8BCC0', textColor: '#FFFFFF' },
+  'end':           { fill: '#FCF5B1', stroke: '#B29B24', textColor: '#333333' },
+  'process':       { fill: '#C1DDE3', stroke: '#77B2C7', textColor: '#333333' },
+  'decision':      { fill: '#E6E6E6', stroke: '#B8B8B8', textColor: '#333333' },
+  'user-decision': { fill: '#FFFFFF', stroke: '#B8B8B8', textColor: '#333333' },
+  'error':         { fill: '#EEA79E', stroke: '#DB7060', textColor: '#333333' },
+  'confirmation':  { fill: '#E2EDCC', stroke: '#7A9A01', textColor: '#333333' },
+  'alt-flow':      { fill: '#C39DE3', stroke: '#805AA1', textColor: '#333333' },
+  'note':          { fill: '#FFD966', stroke: 'none',    textColor: '#333333' }
+};
+
+function getStyle(type) { return NODE_STYLES[type] || NODE_STYLES['process']; }
+
+// ─── Node dimensions (from Figma reference) ───
+const NODE_W = 272, NODE_H = 106, PILL_RX = 53, RECT_RX = 6;
+const DIAMOND_SIZE = 85; // half-side length before rotation — gives ~120px visual diagonal
+const CIRCLE_R = 50;
+const NOTE_SIZE = 140;
+
+function getNodeWidth(node) {
+  if (node.type === 'decision') return DIAMOND_SIZE * 2 * 1.414; // rotated diagonal
+  if (node.type === 'user-decision') return CIRCLE_R * 2;
+  if (node.type === 'note') return NOTE_SIZE;
+  return NODE_W;
+}
+function getNodeHeight(node) {
+  if (node.type === 'decision') return DIAMOND_SIZE * 2 * 1.414; // rotated diagonal
+  if (node.type === 'user-decision') return CIRCLE_R * 2;
+  if (node.type === 'note') return NOTE_SIZE;
+  return NODE_H;
+}
+
+// ─── Layout algorithm ───
+const COL_GAP = 160, ROW_GAP = 160;
+const COL_W = NODE_W + COL_GAP; // 432
+const ROW_H = NODE_H + ROW_GAP; // 266
+
+function layoutNodes(nodes, edges) {
+  // Build adjacency from edges
+  const adj = {};
+  const inDegree = {};
+  nodes.forEach(n => { adj[n.id] = []; inDegree[n.id] = 0; });
+  edges.forEach(e => {
+    adj[e.from] = adj[e.from] || [];
+    adj[e.from].push(e);
+    inDegree[e.to] = (inDegree[e.to] || 0) + 1;
+  });
+
+  // Find start node
+  let startNode = nodes.find(n => n.type === 'start');
+  if (!startNode) startNode = nodes.find(n => inDegree[n.id] === 0) || nodes[0];
+
+  // BFS to assign columns and rows
+  const visited = new Set();
+  const queue = [{ id: startNode.id, col: 0, row: 0 }];
+  const positions = {};
+  const colUsed = {}; // track which rows are used per column
+
+  while (queue.length > 0) {
+    const { id, col, row } = queue.shift();
+    if (visited.has(id)) continue;
+    visited.add(id);
+    positions[id] = { col, row };
+
+    // Track column usage
+    if (!colUsed[col]) colUsed[col] = new Set();
+    colUsed[col].add(row);
+
+    const outEdges = adj[id] || [];
+    // Sort: happy path first, then normal, then error
+    const sorted = [...outEdges].sort((a, b) => {
+      if (a.isHappyPath && !b.isHappyPath) return -1;
+      if (!a.isHappyPath && b.isHappyPath) return 1;
+      if (a.isError && !b.isError) return 1;
+      if (!a.isError && b.isError) return -1;
+      return 0;
+    });
+
+    let branchOffset = 1;
+    sorted.forEach((edge, i) => {
+      if (visited.has(edge.to)) return;
+      if (i === 0 && (edge.isHappyPath || sorted.length === 1)) {
+        // Happy path or only path — same row, next column
+        queue.push({ id: edge.to, col: col + 1, row: row });
+      } else {
+        // Branch — offset row. Errors go down, alt goes up.
+        const dir = edge.isError ? 1 : (edge.isAltFlow ? -1 : branchOffset);
+        queue.push({ id: edge.to, col: col + 1, row: row + dir });
+        branchOffset++;
+      }
+    });
+  }
+
+  // Handle unvisited nodes (disconnected)
+  let maxCol = 0;
+  Object.values(positions).forEach(p => { if (p.col > maxCol) maxCol = p.col; });
+  nodes.forEach(n => {
+    if (!visited.has(n.id)) {
+      maxCol++;
+      positions[n.id] = { col: maxCol, row: 0 };
+    }
+  });
+
+  // Convert grid positions to pixel coordinates
+  const START_X = 200;
+  const CENTER_Y = 400;
+  nodes.forEach(n => {
+    const pos = positions[n.id];
+    n.col = pos.col;
+    n.row = pos.row;
+    n.x = START_X + pos.col * COL_W;
+    n.y = CENTER_Y + pos.row * ROW_H;
+  });
+}
+
+// ─── Edge center for connector attachment ───
+function getEdgePoint(node, side) {
+  const w = getNodeWidth(node);
+  const h = getNodeHeight(node);
+  switch (side) {
+    case 'right':  return { x: node.x + w / 2, y: node.y };
+    case 'left':   return { x: node.x - w / 2, y: node.y };
+    case 'bottom': return { x: node.x, y: node.y + h / 2 };
+    case 'top':    return { x: node.x, y: node.y - h / 2 };
+  }
+}
+
+// ─── Build orthogonal path ───
+function buildPath(srcNode, tgtNode) {
+  const sameRow = Math.abs(srcNode.y - tgtNode.y) < 10;
+  const goingRight = tgtNode.x > srcNode.x;
+
+  if (sameRow && goingRight) {
+    // Straight horizontal line
+    const src = getEdgePoint(srcNode, 'right');
+    const tgt = getEdgePoint(tgtNode, 'left');
+    return `M${src.x},${src.y} L${tgt.x},${tgt.y}`;
+  }
+
+  if (goingRight) {
+    // Different row, going right — exit right, bend, enter left
+    const src = getEdgePoint(srcNode, 'right');
+    const tgt = getEdgePoint(tgtNode, 'left');
+    const midX = src.x + COL_GAP * 0.4;
+    return `M${src.x},${src.y} H${midX} V${tgt.y} H${tgt.x}`;
+  }
+
+  // Going LEFT (loop back) — route cleanly around the bottom
+  const src = getEdgePoint(srcNode, 'bottom');
+  const tgt = getEdgePoint(tgtNode, 'bottom');
+  const loopY = Math.max(src.y, tgt.y) + ROW_GAP * 0.6;
+  return `M${src.x},${src.y} V${loopY} H${tgt.x} V${tgt.y}`;
+}
+
+// ─── Rendering ───
+const width = window.innerWidth;
+const height = window.innerHeight - 48;
+
+document.getElementById('flow-title').textContent = flowData.title;
+
+const svg = d3.select('#flow-svg')
+  .attr('width', width)
+  .attr('height', height)
+  .style('background', '#FAF8F5')
+  .style('margin-top', '48px');
+
+const defs = svg.append('defs');
+
+// Arrowhead markers
+function addMarker(id, color) {
+  defs.append('marker')
+    .attr('id', id)
+    .attr('viewBox', '0 0 10 7')
+    .attr('refX', 10).attr('refY', 3.5)
+    .attr('markerWidth', 10).attr('markerHeight', 7)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,0 L10,3.5 L0,7 Z')
+    .attr('fill', color);
+}
+addMarker('arrow-default', '#B8B8B8');
+addMarker('arrow-happy', '#7A9A01');
+addMarker('arrow-error', '#CF6253');
+
+const container = svg.append('g').attr('class', 'canvas-container');
+
+// Zoom
+const zoomBehavior = d3.zoom()
+  .scaleExtent([0.15, 3])
+  .on('zoom', (event) => container.attr('transform', event.transform));
+svg.call(zoomBehavior);
+
+// Zoom controls
+window.zoomIn = () => svg.transition().duration(300).call(zoomBehavior.scaleBy, 1.3);
+window.zoomOut = () => svg.transition().duration(300).call(zoomBehavior.scaleBy, 0.75);
+window.fitAll = () => fitToContent();
+
+// ─── Layout ───
+layoutNodes(flowData.nodes, flowData.edges);
+
+// Build node lookup
+const nodeMap = {};
+flowData.nodes.forEach(n => nodeMap[n.id] = n);
+
+// ─── Draw edges ───
+const edgesGroup = container.append('g').attr('class', 'edges');
+
+flowData.edges.forEach(edge => {
+  const src = nodeMap[edge.from];
+  const tgt = nodeMap[edge.to];
+  if (!src || !tgt) return;
+
+  const isHappy = edge.isHappyPath;
+  const isErr = edge.isError;
+  const color = isHappy ? '#7A9A01' : (isErr ? '#CF6253' : '#B8B8B8');
+  const strokeW = isHappy ? 2.5 : 2;
+  const marker = isHappy ? 'url(#arrow-happy)' : (isErr ? 'url(#arrow-error)' : 'url(#arrow-default)');
+  const dashArray = isErr ? '6,4' : 'none';
+
+  const path = buildPath(src, tgt);
+
+  edgesGroup.append('path')
+    .attr('d', path)
+    .attr('fill', 'none')
+    .attr('stroke', color)
+    .attr('stroke-width', strokeW)
+    .attr('stroke-dasharray', dashArray)
+    .attr('marker-end', marker);
+
+  // Edge label
+  if (edge.label) {
+    const midX = (src.x + tgt.x) / 2;
+    const midY = (src.y + tgt.y) / 2;
+    // Offset labels above horizontal lines, beside vertical segments
+    const offsetY = Math.abs(src.y - tgt.y) < 10 ? -16 : 0;
+    const offsetX = Math.abs(src.y - tgt.y) < 10 ? 0 : 14;
+
+    const labelG = edgesGroup.append('g')
+      .attr('transform', `translate(${midX + offsetX}, ${midY + offsetY})`);
+
+    labelG.append('rect')
+      .attr('class', 'edge-label-bg')
+      .attr('x', -24).attr('y', -12)
+      .attr('width', 48).attr('height', 24)
+      .attr('rx', 12)
+      .attr('fill', '#FFFFFF')
+      .attr('stroke', '#E0DCD3')
+      .attr('stroke-width', 1);
+
+    labelG.append('text')
+      .attr('class', 'edge-label-text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('font-size', '13px')
+      .attr('font-weight', '500')
+      .attr('fill', '#555555')
+      .text(edge.label);
+
+    // Auto-size background to text
+    const textNode = labelG.select('text').node();
+    if (textNode) {
+      const bbox = textNode.getBBox();
+      labelG.select('rect')
+        .attr('x', bbox.x - 10)
+        .attr('y', bbox.y - 5)
+        .attr('width', bbox.width + 20)
+        .attr('height', bbox.height + 10);
+    }
+  }
+});
+
+// ─── Draw nodes ───
+const nodesGroup = container.append('g').attr('class', 'nodes');
+
+flowData.nodes.forEach(node => {
+  const style = getStyle(node.type);
+  const g = nodesGroup.append('g')
+    .attr('class', `node node-${node.type}`)
+    .attr('transform', `translate(${node.x}, ${node.y})`)
+    .style('cursor', 'pointer')
+    .on('click', () => showSidebar(node));
+
+  if (node.type === 'decision') {
+    // Diamond — rotated rect. DIAMOND_SIZE = half side length
+    g.append('rect')
+      .attr('x', -DIAMOND_SIZE).attr('y', -DIAMOND_SIZE)
+      .attr('width', DIAMOND_SIZE * 2).attr('height', DIAMOND_SIZE * 2)
+      .attr('rx', 6)
+      .attr('fill', style.fill)
+      .attr('stroke', style.stroke)
+      .attr('stroke-width', 4)
+      .attr('transform', 'rotate(45)');
+    // Text NOT rotated — wrap if needed
+    const words = node.label.split(/\s+/);
+    if (words.length <= 2) {
+      g.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('fill', style.textColor)
+        .attr('font-size', '16px')
+        .attr('font-weight', '500')
+        .text(node.label);
+    } else {
+      // Multi-line for longer labels
+      const mid = Math.ceil(words.length / 2);
+      g.append('text').attr('text-anchor', 'middle').attr('dy', '-0.3em')
+        .attr('fill', style.textColor).attr('font-size', '15px').attr('font-weight', '500')
+        .text(words.slice(0, mid).join(' '));
+      g.append('text').attr('text-anchor', 'middle').attr('dy', '1.1em')
+        .attr('fill', style.textColor).attr('font-size', '15px').attr('font-weight', '500')
+        .text(words.slice(mid).join(' '));
+    }
+
+  } else if (node.type === 'user-decision') {
+    // Circle
+    g.append('circle')
+      .attr('r', CIRCLE_R)
+      .attr('fill', style.fill)
+      .attr('stroke', style.stroke)
+      .attr('stroke-width', 4);
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('fill', style.textColor)
+      .attr('font-size', '16px')
+      .attr('font-weight', '500')
+      .text(node.label);
+
+  } else if (node.type === 'start' || node.type === 'end') {
+    // Stadium pill
+    g.append('rect')
+      .attr('x', -NODE_W / 2).attr('y', -NODE_H / 2)
+      .attr('width', NODE_W).attr('height', NODE_H)
+      .attr('rx', PILL_RX)
+      .attr('fill', style.fill)
+      .attr('stroke', style.stroke)
+      .attr('stroke-width', 4);
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('fill', style.textColor)
+      .attr('font-size', '20px')
+      .attr('font-weight', '600')
+      .text(node.label);
+
+  } else if (node.type === 'note') {
+    // Yellow sticky note
+    g.append('rect')
+      .attr('x', -NOTE_SIZE / 2).attr('y', -NOTE_SIZE / 2)
+      .attr('width', NOTE_SIZE).attr('height', NOTE_SIZE)
+      .attr('fill', style.fill);
+    g.append('text')
+      .attr('x', -NOTE_SIZE / 2 + 12).attr('y', -NOTE_SIZE / 2 + 20)
+      .attr('fill', style.textColor)
+      .attr('font-size', '11px')
+      .attr('font-weight', '600')
+      .text('NOTE');
+    // Wrap body text
+    const words = (node.label || '').split(' ');
+    let line = '', lineNum = 0;
+    words.forEach(word => {
+      const test = line ? line + ' ' + word : word;
+      if (test.length > 18) {
+        g.append('text')
+          .attr('x', -NOTE_SIZE / 2 + 12)
+          .attr('y', -NOTE_SIZE / 2 + 40 + lineNum * 16)
+          .attr('fill', style.textColor)
+          .attr('font-size', '12px')
+          .text(line);
+        line = word;
+        lineNum++;
+      } else {
+        line = test;
+      }
+    });
+    if (line) {
+      g.append('text')
+        .attr('x', -NOTE_SIZE / 2 + 12)
+        .attr('y', -NOTE_SIZE / 2 + 40 + lineNum * 16)
+        .attr('fill', style.textColor)
+        .attr('font-size', '12px')
+        .text(line);
+    }
+
+  } else {
+    // Default rectangle: process, error, confirmation, alt-flow
+    g.append('rect')
+      .attr('x', -NODE_W / 2).attr('y', -NODE_H / 2)
+      .attr('width', NODE_W).attr('height', NODE_H)
+      .attr('rx', RECT_RX)
+      .attr('fill', style.fill)
+      .attr('stroke', style.stroke)
+      .attr('stroke-width', 4);
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('fill', style.textColor)
+      .attr('font-size', '20px')
+      .attr('font-weight', '500')
+      .text(node.label);
+  }
+
+  // Hover effect
+  g.on('mouseenter', function() {
+    d3.select(this).select('rect, circle').transition().duration(150)
+      .attr('stroke-width', 5);
+  }).on('mouseleave', function() {
+    d3.select(this).select('rect, circle').transition().duration(150)
+      .attr('stroke-width', 4);
+  });
+});
+
+// ─── Sidebar ───
+const sidebar = document.getElementById('sidebar');
+const sidebarContent = document.getElementById('sidebar-content');
+
+function showSidebar(node) {
+  const style = getStyle(node.type);
+  const typeName = node.type.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  let html = `<div class="node-type-badge" style="background:${style.fill};color:${style.textColor};border:1px solid ${style.stroke}">${typeName}</div>`;
+  html += `<h2>${node.label}</h2>`;
+
+  if (node.description) {
+    html += `<div class="section"><div class="section-label">Description</div><div class="section-content">${node.description}</div></div>`;
+  }
+  if (node.userAction) {
+    html += `<div class="section"><div class="section-label">User Action</div><div class="section-content">${node.userAction}</div></div>`;
+  }
+  if (node.edgeCases && node.edgeCases.length) {
+    html += `<div class="section"><div class="section-label">Edge Cases</div><ul class="exit-list">${node.edgeCases.map(e => `<li>${e}</li>`).join('')}</ul></div>`;
+  }
+
+  // Show exits
+  const exits = flowData.edges.filter(e => e.from === node.id);
+  if (exits.length) {
+    html += `<div class="section"><div class="section-label">Exits</div><ul class="exit-list">`;
+    exits.forEach(e => {
+      const tgt = nodeMap[e.to];
+      html += `<li>${e.label ? `<strong>${e.label}</strong> → ` : '→ '}${tgt ? tgt.label : e.to}</li>`;
+    });
+    html += `</ul></div>`;
+  }
+
+  sidebarContent.innerHTML = html;
+  sidebar.classList.add('open');
+}
+
+window.closeSidebar = () => sidebar.classList.remove('open');
+
+// Click empty canvas to close sidebar
+svg.on('click', (event) => {
+  if (event.target === svg.node()) closeSidebar();
+});
+
+// ─── Fit to content on load ───
+function fitToContent() {
+  const bounds = container.node().getBBox();
+  if (bounds.width === 0 || bounds.height === 0) return;
+  const pad = 100;
+  const bw = bounds.width + pad * 2;
+  const bh = bounds.height + pad * 2;
+  const scale = Math.min(width / bw, height / bh, 1.2);
+  const tx = (width - bounds.width * scale) / 2 - bounds.x * scale;
+  const ty = (height - bounds.height * scale) / 2 - bounds.y * scale;
+  svg.transition().duration(600)
+    .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+}
+
+// Initial fit after a small delay to let fonts load
+setTimeout(fitToContent, 100);
+
+</script>
+</body>
+</html>
