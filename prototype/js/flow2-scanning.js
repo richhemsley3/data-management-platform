@@ -942,140 +942,419 @@
 
   // ---- 9. Data Catalog (/catalog) ----
 
+  // Helper: render a catalog table row as HTML string
+  function catalogTableRow(t) {
+    var row = '<tr data-navigate="#/catalog/' + t.id + '" role="link" tabindex="0">';
+    // Table name (bold) + schema.connection breadcrumb
+    row += '<td>';
+    row += '<div><a data-navigate="#/catalog/' + t.id + '" style="font-weight:600;color:var(--sds-text-primary);cursor:pointer;font-size:14px;">' + t.name + '</a></div>';
+    row += '<div style="font-size:12px;color:var(--sds-text-tertiary);margin-top:2px;">' + t.schema + ' &middot; ' + t.connectionName + '</div>';
+    row += '</td>';
+    // Classification badges
+    row += '<td>';
+    if (t.tags && t.tags.length > 0) {
+      for (var i = 0; i < t.tags.length; i++) {
+        row += categoryTag(t.tags[i]) + ' ';
+      }
+    } else {
+      row += '<span style="color:var(--sds-text-disabled);">--</span>';
+    }
+    row += '</td>';
+    // Classification coverage bar
+    var clsPct = t.classifiedPct || 0;
+    var clsColor;
+    if (clsPct === 100) clsColor = 'var(--sds-status-success-strong)';
+    else if (clsPct >= 70) clsColor = 'var(--sds-status-warning-strong)';
+    else if (clsPct > 0) clsColor = 'var(--sds-status-error-strong)';
+    else clsColor = 'var(--sds-text-disabled)';
+    row += '<td>';
+    row += '<div style="display:flex;align-items:center;gap:8px;">';
+    row += '<div style="width:48px;height:6px;border-radius:3px;background:var(--sds-bg-subtle);">';
+    row += '<div style="width:' + clsPct + '%;height:100%;border-radius:3px;background:' + clsColor + ';"></div>';
+    row += '</div>';
+    row += '<span style="font-size:12px;font-weight:500;color:var(--sds-text-secondary);">' + clsPct + '%</span>';
+    row += '</div>';
+    row += '</td>';
+    // Sensitivity
+    row += '<td>' + Components.sensitivityTag(t.sensitivity) + '</td>';
+    // Owner
+    row += '<td style="font-size:13px;color:var(--sds-text-secondary);">' + (t.owner || '--') + '</td>';
+    // Last scanned
+    row += '<td style="font-size:13px;color:var(--sds-text-tertiary);white-space:nowrap;">' + Data.timeAgo(t.lastScanned) + '</td>';
+    // Row count
+    row += '<td style="text-align:right;font-variant-numeric:tabular-nums;font-size:13px;">' + Data.formatNumber(t.rowCount) + '</td>';
+    row += '</tr>';
+    return row;
+  }
+
+  // Helper: filter tables based on current filter state
+  function filterCatalogTables(query, connectionFilter, sensitivityFilter, statusFilter) {
+    return Data.tables.filter(function(t) {
+      // Text search
+      if (query) {
+        var q = query.toLowerCase();
+        var matchesText = t.name.toLowerCase().indexOf(q) > -1 ||
+          t.schema.toLowerCase().indexOf(q) > -1 ||
+          t.connectionName.toLowerCase().indexOf(q) > -1 ||
+          (t.owner && t.owner.toLowerCase().indexOf(q) > -1) ||
+          (t.tags && t.tags.join(' ').toLowerCase().indexOf(q) > -1);
+        if (!matchesText) return false;
+      }
+      // Connection filter
+      if (connectionFilter && t.connectionId !== connectionFilter) return false;
+      // Sensitivity filter
+      if (sensitivityFilter && t.sensitivity !== sensitivityFilter) return false;
+      // Classification status filter
+      if (statusFilter) {
+        if (statusFilter === 'full' && t.classifiedPct !== 100) return false;
+        if (statusFilter === 'partial' && (t.classifiedPct === 0 || t.classifiedPct === 100)) return false;
+        if (statusFilter === 'unreviewed' && t.classifiedPct > 0) return false;
+      }
+      return true;
+    });
+  }
+
+  // Helper: build tree data grouped by Connection > Schema > Table
+  function buildCatalogTree() {
+    var tree = {};
+    var tables = Data.tables;
+    for (var i = 0; i < tables.length; i++) {
+      var t = tables[i];
+      if (!tree[t.connectionId]) {
+        tree[t.connectionId] = { name: t.connectionName, id: t.connectionId, schemas: {} };
+      }
+      if (!tree[t.connectionId].schemas[t.schema]) {
+        tree[t.connectionId].schemas[t.schema] = [];
+      }
+      tree[t.connectionId].schemas[t.schema].push(t);
+    }
+    return tree;
+  }
+
+  // Helper: render the tree panel HTML
+  function renderTreePanel() {
+    var tree = buildCatalogTree();
+    var connIds = Object.keys(tree).sort(function(a, b) {
+      return tree[a].name.localeCompare(tree[b].name);
+    });
+
+    var html = '';
+    html += '<div id="catalog-tree-panel" style="width:260px;min-width:260px;background:var(--sds-bg-surface);border:1px solid var(--sds-border-subtle);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 180px);position:sticky;top:16px;">';
+
+    // Tree header
+    html += '<div style="padding:12px 16px;border-bottom:1px solid var(--sds-border-subtle);display:flex;align-items:center;justify-content:space-between;">';
+    html += '<span style="font-size:13px;font-weight:600;color:var(--sds-text-primary);display:flex;align-items:center;gap:6px;">' + Icons.render('folder', 14) + ' Browse</span>';
+    html += '<button id="tree-collapse-all" style="font-size:11px;color:var(--sds-text-link);background:none;border:none;cursor:pointer;padding:2px 4px;">Collapse All</button>';
+    html += '</div>';
+
+    // Tree body (scrollable)
+    html += '<div style="overflow-y:auto;padding:8px 0;flex:1;">';
+
+    for (var ci = 0; ci < connIds.length; ci++) {
+      var conn = tree[connIds[ci]];
+      var schemaKeys = Object.keys(conn.schemas).sort();
+      var connTableCount = 0;
+      for (var sk = 0; sk < schemaKeys.length; sk++) {
+        connTableCount += conn.schemas[schemaKeys[sk]].length;
+      }
+
+      // Connection node (level 0)
+      html += '<div class="tree-node tree-connection" data-conn-id="' + conn.id + '">';
+      html += '<div class="tree-item tree-item-conn" data-tree-toggle="conn-' + conn.id + '" style="display:flex;align-items:center;gap:6px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--sds-text-primary);user-select:none;" role="treeitem">';
+      html += '<span class="tree-chevron" style="transition:transform 0.15s;display:inline-flex;color:var(--sds-text-tertiary);">▶</span>';
+      html += '<span style="display:inline-flex;color:var(--sds-text-tertiary);">' + Icons.render('connections', 14) + '</span>';
+      html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + conn.name + '">' + conn.name + '</span>';
+      html += '<span style="font-size:11px;font-weight:500;color:var(--sds-text-tertiary);background:var(--sds-bg-subtle);border-radius:8px;padding:1px 6px;">' + connTableCount + '</span>';
+      html += '</div>';
+
+      // Schema children (level 1)
+      html += '<div class="tree-children" id="tree-conn-' + conn.id + '" style="display:none;padding-left:12px;">';
+      for (var si = 0; si < schemaKeys.length; si++) {
+        var schemaName = schemaKeys[si];
+        var schemaTables = conn.schemas[schemaName];
+
+        html += '<div class="tree-node tree-schema">';
+        html += '<div class="tree-item tree-item-schema" data-tree-toggle="schema-' + conn.id + '-' + schemaName + '" style="display:flex;align-items:center;gap:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:500;color:var(--sds-text-secondary);user-select:none;" role="treeitem">';
+        html += '<span class="tree-chevron" style="transition:transform 0.15s;display:inline-flex;color:var(--sds-text-tertiary);font-size:10px;">▶</span>';
+        html += '<span style="display:inline-flex;color:var(--sds-text-tertiary);">' + Icons.render('folder', 12) + '</span>';
+        html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + schemaName + '</span>';
+        html += '<span style="font-size:10px;font-weight:500;color:var(--sds-text-tertiary);">' + schemaTables.length + '</span>';
+        html += '</div>';
+
+        // Table children (level 2)
+        html += '<div class="tree-children" id="tree-schema-' + conn.id + '-' + schemaName + '" style="display:none;padding-left:12px;">';
+        // Sort tables alphabetically
+        schemaTables.sort(function(a, b) { return a.name.localeCompare(b.name); });
+        for (var ti = 0; ti < schemaTables.length; ti++) {
+          var tbl = schemaTables[ti];
+          var sensColor = tbl.sensitivity === 'critical' ? 'var(--sds-status-error-strong)' :
+                          tbl.sensitivity === 'high' ? 'var(--sds-status-warning-strong)' :
+                          tbl.sensitivity === 'medium' ? 'var(--sds-status-info-strong)' : 'var(--sds-text-disabled)';
+          html += '<div class="tree-item tree-item-table" data-navigate="#/catalog/' + tbl.id + '" style="display:flex;align-items:center;gap:6px;padding:4px 12px 4px 18px;cursor:pointer;font-size:12px;color:var(--sds-text-secondary);user-select:none;border-radius:4px;" role="treeitem">';
+          html += '<span style="width:6px;height:6px;border-radius:50%;background:' + sensColor + ';flex-shrink:0;"></span>';
+          html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:\'SF Mono\',Menlo,monospace;">' + tbl.name + '</span>';
+          if (tbl.tags && tbl.tags.length > 0) {
+            html += '<span style="font-size:9px;font-weight:600;color:var(--sds-status-error-text);background:var(--sds-status-error-bg);border-radius:3px;padding:1px 4px;">' + tbl.tags[0] + '</span>';
+          }
+          html += '</div>';
+        }
+        html += '</div>'; // schema children
+        html += '</div>'; // schema node
+      }
+      html += '</div>'; // conn children
+      html += '</div>'; // conn node
+    }
+
+    html += '</div>'; // tree body
+    html += '</div>'; // tree panel
+
+    return html;
+  }
+
+  // Wire up tree expand/collapse behavior
+  function wireTreePanel() {
+    var panel = document.getElementById('catalog-tree-panel');
+    if (!panel) return;
+
+    // Toggle expand/collapse on click
+    panel.addEventListener('click', function(e) {
+      var toggleItem = e.target.closest('[data-tree-toggle]');
+      if (toggleItem) {
+        var targetId = 'tree-' + toggleItem.getAttribute('data-tree-toggle');
+        var children = document.getElementById(targetId);
+        var chevron = toggleItem.querySelector('.tree-chevron');
+        if (children) {
+          var isOpen = children.style.display !== 'none';
+          children.style.display = isOpen ? 'none' : 'block';
+          if (chevron) {
+            chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+          }
+        }
+      }
+    });
+
+    // Hover effect for table items
+    panel.addEventListener('mouseover', function(e) {
+      var item = e.target.closest('.tree-item-table');
+      if (item) item.style.background = 'var(--sds-bg-subtle)';
+    });
+    panel.addEventListener('mouseout', function(e) {
+      var item = e.target.closest('.tree-item-table');
+      if (item) item.style.background = 'transparent';
+    });
+
+    // Collapse all button
+    var collapseBtn = document.getElementById('tree-collapse-all');
+    if (collapseBtn) {
+      collapseBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var allChildren = panel.querySelectorAll('.tree-children');
+        var allChevrons = panel.querySelectorAll('.tree-chevron');
+        for (var i = 0; i < allChildren.length; i++) {
+          allChildren[i].style.display = 'none';
+        }
+        for (var j = 0; j < allChevrons.length; j++) {
+          allChevrons[j].style.transform = 'rotate(0deg)';
+        }
+      });
+    }
+  }
+
   function renderDataCatalog() {
     var tables = Data.tables;
 
+    // Compute stats
+    var totalAssets = tables.length;
+    var classifiedCount = 0;
+    var pendingCount = Data.getPendingClassifications().length;
+    var connectionSet = {};
+    for (var s = 0; s < tables.length; s++) {
+      if (tables[s].classifiedPct === 100) classifiedCount++;
+      connectionSet[tables[s].connectionId] = true;
+    }
+    var classifiedPct = totalAssets > 0 ? Math.round((classifiedCount / totalAssets) * 100) : 0;
+    var connCount = Object.keys(connectionSet).length;
+
     var html = '';
-    html += Components.pageHeader(
-      'Data Catalog',
-      tables.length + ' tables across ' + Data.connections.length + ' connections',
-      Components.button(Icons.render('download', 14) + ' Export', 'secondary', 'md')
-    );
 
-    // Filter bar
-    html += Components.filterBar([
-      { name: 'connection', options: [
-        { value: '', label: 'All Connections' },
-        { value: 'conn-1', label: 'Snowflake Production' },
-        { value: 'conn-2', label: 'AWS S3 Data Lake' },
-        { value: 'conn-3', label: 'BigQuery Analytics' },
-        { value: 'conn-4', label: 'Databricks ML Workspace' }
-      ]},
-      { name: 'sensitivity', options: [
-        { value: '', label: 'All Sensitivity' },
-        { value: 'critical', label: 'Critical' },
-        { value: 'high', label: 'High' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'low', label: 'Low' }
-      ]},
-      { name: 'status', options: [
-        { value: '', label: 'All Status' },
-        { value: 'full', label: 'Fully Classified' },
-        { value: 'partial', label: 'Partially Classified' },
-        { value: 'unreviewed', label: 'Unreviewed' }
-      ]}
-    ], 'Search tables...');
+    // Layout: tree panel + main content
+    html += '<div style="display:flex;gap:20px;align-items:flex-start;">';
 
-    html += Components.dataTable({
-      columns: [
-        { key: 'schema', label: 'Schema' },
-        { key: 'name', label: 'Table', render: function(val, row) {
-          return '<a data-navigate="#/catalog/' + row.id + '" style="font-weight:500;color:var(--sds-text-primary,#2C2924);cursor:pointer;">' + val + '</a>';
-        }},
-        { key: 'connectionName', label: 'Connection', render: function(val) {
-          return '<span style="font-size:13px;color:var(--sds-text-secondary,#54514D);">' + val + '</span>';
-        }},
-        { key: 'columns', label: 'Columns', align: 'right' },
-        { key: 'classifiedPct', label: 'Classified', render: function(val) {
-          var color;
-          if (val === 100) color = 'var(--sds-status-success-strong)';
-          else if (val > 0) color = 'var(--sds-status-warning-strong)';
-          else color = 'var(--sds-text-disabled)';
-          var barHtml = '<div style="display:flex;align-items:center;gap:8px;">';
-          barHtml += '<div style="width:40px;height:4px;border-radius:2px;background:var(--sds-bg-subtle);">';
-          barHtml += '<div style="width:' + val + '%;height:100%;border-radius:2px;background:' + color + ';"></div>';
-          barHtml += '</div>';
-          barHtml += '<span style="font-size:12px;color:var(--sds-text-secondary,#54514D);">' + val + '%</span>';
-          barHtml += '</div>';
-          return barHtml;
-        }},
-        { key: 'sensitivity', label: 'Sensitivity', render: function(val) {
-          return Components.sensitivityTag(val);
-        }},
-        { key: 'tags', label: 'Tags', render: function(val) {
-          if (!val || val.length === 0) return '--';
-          var t = '';
-          for (var i = 0; i < val.length; i++) {
-            t += categoryTag(val[i]) + ' ';
-          }
-          return t;
-        }},
-        { key: 'lastScanned', label: 'Last Scanned', render: function(val) {
-          return '<span style="font-size:13px;color:var(--sds-text-tertiary,#7A756B);">' + Data.timeAgo(val) + '</span>';
-        }}
-      ],
-      rows: tables,
-      onRowClick: '#/catalog/:id'
-    });
+    // Tree panel (left)
+    html += renderTreePanel();
+
+    // Main content (right)
+    html += '<div style="flex:1;min-width:0;">';
+
+    // Search-first hero section
+    html += '<div style="text-align:center;padding:32px 0 28px 0;">';
+    html += '<h1 style="font-size:28px;font-weight:700;color:var(--sds-text-primary);margin-bottom:8px;">Data Catalog</h1>';
+    html += '<p style="font-size:15px;color:var(--sds-text-secondary);margin-bottom:24px;">' + totalAssets + ' tables across ' + connCount + ' connections</p>';
+    // Large centered search bar
+    html += '<div style="max-width:600px;margin:0 auto;position:relative;">';
+    html += '<input id="catalog-search" class="form-input" type="text" placeholder="Search tables, schemas, connections, owners..." style="height:48px;font-size:16px;padding:0 16px 0 44px;border-radius:10px;border:1.5px solid var(--sds-border-strong);box-shadow:0 2px 8px rgba(0,0,0,0.06);">';
+    html += '<div style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--sds-text-tertiary);pointer-events:none;">' + Icons.render('search', 18) + '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    // Quick stats row
+    html += '<div class="grid-4" style="margin-bottom:24px;">';
+    html += Components.statCard('Total Assets', totalAssets, 'Tables discovered');
+    html += Components.statCard('Classified', classifiedPct + '%', classifiedCount + ' of ' + totalAssets + ' tables');
+    html += Components.statCard('Connections', connCount, 'Active data sources');
+    html += Components.statCard('Pending Reviews', pendingCount, 'Classifications awaiting review');
+    html += '</div>';
+
+    // Browse paths as clickable cards
+    html += '<div style="margin-bottom:28px;">';
+    html += '<h3 style="font-size:14px;font-weight:600;color:var(--sds-text-secondary);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:12px;">Browse By</h3>';
+    html += '<div class="grid-4" style="gap:12px;">';
+    // By Connection
+    html += '<div class="sds-card" style="cursor:pointer;padding:16px 20px;" onclick="document.querySelector(\'#catalog-filter-connection\').value=\'conn-1\';document.querySelector(\'#catalog-filter-connection\').dispatchEvent(new Event(\'change\'));">';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<div style="width:32px;height:32px;border-radius:8px;background:var(--sds-status-info-bg);display:flex;align-items:center;justify-content:center;color:var(--sds-status-info-text);">' + Icons.render('connections', 16) + '</div>';
+    html += '<div><div style="font-weight:600;font-size:14px;color:var(--sds-text-primary);">By Connection</div>';
+    html += '<div style="font-size:12px;color:var(--sds-text-tertiary);">' + connCount + ' sources</div></div>';
+    html += '</div></div>';
+    // By Classification
+    html += '<div class="sds-card" style="cursor:pointer;padding:16px 20px;" onclick="document.querySelector(\'#catalog-filter-status\').value=\'full\';document.querySelector(\'#catalog-filter-status\').dispatchEvent(new Event(\'change\'));">';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<div style="width:32px;height:32px;border-radius:8px;background:var(--sds-status-success-bg);display:flex;align-items:center;justify-content:center;color:var(--sds-status-success-text);">' + Icons.render('shield', 16) + '</div>';
+    html += '<div><div style="font-weight:600;font-size:14px;color:var(--sds-text-primary);">By Classification</div>';
+    html += '<div style="font-size:12px;color:var(--sds-text-tertiary);">' + classifiedCount + ' fully classified</div></div>';
+    html += '</div></div>';
+    // By Sensitivity
+    var criticalCount = tables.filter(function(t) { return t.sensitivity === 'critical'; }).length;
+    html += '<div class="sds-card" style="cursor:pointer;padding:16px 20px;" onclick="document.querySelector(\'#catalog-filter-sensitivity\').value=\'critical\';document.querySelector(\'#catalog-filter-sensitivity\').dispatchEvent(new Event(\'change\'));">';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<div style="width:32px;height:32px;border-radius:8px;background:var(--sds-status-error-bg);display:flex;align-items:center;justify-content:center;color:var(--sds-status-error-text);">' + Icons.render('scan', 16) + '</div>';
+    html += '<div><div style="font-weight:600;font-size:14px;color:var(--sds-text-primary);">By Sensitivity</div>';
+    html += '<div style="font-size:12px;color:var(--sds-text-tertiary);">' + criticalCount + ' critical tables</div></div>';
+    html += '</div></div>';
+    // Unclassified
+    var unclassifiedCount = tables.filter(function(t) { return t.classifiedPct === 0; }).length;
+    html += '<div class="sds-card" style="cursor:pointer;padding:16px 20px;" onclick="document.querySelector(\'#catalog-filter-status\').value=\'unreviewed\';document.querySelector(\'#catalog-filter-status\').dispatchEvent(new Event(\'change\'));">';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<div style="width:32px;height:32px;border-radius:8px;background:var(--sds-status-warning-bg);display:flex;align-items:center;justify-content:center;color:var(--sds-status-warning-text);">' + Icons.render('review', 16) + '</div>';
+    html += '<div><div style="font-weight:600;font-size:14px;color:var(--sds-text-primary);">Unclassified</div>';
+    html += '<div style="font-size:12px;color:var(--sds-text-tertiary);">' + unclassifiedCount + ' need attention</div></div>';
+    html += '</div></div>';
+    html += '</div>'; // grid
+    html += '</div>'; // browse section
+
+    // Recently scanned section
+    var recentTables = tables.slice().sort(function(a, b) {
+      return new Date(b.lastScanned) - new Date(a.lastScanned);
+    }).slice(0, 4);
+    html += '<div style="margin-bottom:28px;">';
+    html += '<h3 style="font-size:14px;font-weight:600;color:var(--sds-text-secondary);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:12px;">Recently Scanned</h3>';
+    html += '<div class="grid-4" style="gap:12px;">';
+    for (var rt = 0; rt < recentTables.length; rt++) {
+      var rTbl = recentTables[rt];
+      html += '<div class="sds-card" data-navigate="#/catalog/' + rTbl.id + '" style="padding:16px 20px;">';
+      html += '<div style="font-weight:600;font-size:14px;font-family:\'SF Mono\',Menlo,monospace;color:var(--sds-text-primary);margin-bottom:4px;">' + rTbl.name + '</div>';
+      html += '<div style="font-size:12px;color:var(--sds-text-tertiary);margin-bottom:8px;">' + rTbl.schema + ' &middot; ' + rTbl.connectionName + '</div>';
+      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+      if (rTbl.tags) {
+        for (var rtg = 0; rtg < rTbl.tags.length; rtg++) {
+          html += categoryTag(rTbl.tags[rtg]);
+        }
+      }
+      html += Components.sensitivityTag(rTbl.sensitivity);
+      html += '</div>';
+      html += '<div style="font-size:11px;color:var(--sds-text-tertiary);margin-top:8px;">' + Data.timeAgo(rTbl.lastScanned) + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    // Filter bar for the full table
+    html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;padding:12px 16px;background:var(--sds-bg-surface);border-radius:8px;border:1px solid var(--sds-bg-subtle);">';
+    html += '<select class="filter-select" id="catalog-filter-connection" style="font-size:13px;height:36px;padding:0 28px 0 10px;border:1px solid var(--sds-border-strong);border-radius:6px;background:var(--sds-bg-card) url(\"data:image/svg+xml,%3Csvg width=\'10\' height=\'6\' viewBox=\'0 0 10 6\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%236B6760\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E\") no-repeat right 10px center;appearance:none;color:var(--sds-text-primary);cursor:pointer;width:auto;">';
+    html += '<option value="">All Connections</option>';
+    for (var ci = 0; ci < Data.connections.length; ci++) {
+      html += '<option value="' + Data.connections[ci].id + '">' + Data.connections[ci].name + '</option>';
+    }
+    html += '</select>';
+    html += '<select class="filter-select" id="catalog-filter-sensitivity" style="font-size:13px;height:36px;padding:0 28px 0 10px;border:1px solid var(--sds-border-strong);border-radius:6px;background:var(--sds-bg-card) url(\"data:image/svg+xml,%3Csvg width=\'10\' height=\'6\' viewBox=\'0 0 10 6\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%236B6760\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E\") no-repeat right 10px center;appearance:none;color:var(--sds-text-primary);cursor:pointer;width:auto;">';
+    html += '<option value="">All Sensitivity</option>';
+    html += '<option value="critical">Critical</option>';
+    html += '<option value="high">High</option>';
+    html += '<option value="medium">Medium</option>';
+    html += '<option value="low">Low</option>';
+    html += '</select>';
+    html += '<select class="filter-select" id="catalog-filter-status" style="font-size:13px;height:36px;padding:0 28px 0 10px;border:1px solid var(--sds-border-strong);border-radius:6px;background:var(--sds-bg-card) url(\"data:image/svg+xml,%3Csvg width=\'10\' height=\'6\' viewBox=\'0 0 10 6\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%236B6760\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E\") no-repeat right 10px center;appearance:none;color:var(--sds-text-primary);cursor:pointer;width:auto;">';
+    html += '<option value="">All Classification Status</option>';
+    html += '<option value="full">Fully Classified</option>';
+    html += '<option value="partial">Partially Classified</option>';
+    html += '<option value="unreviewed">Unclassified</option>';
+    html += '</select>';
+    html += '<div style="flex:1;"></div>';
+    html += '<span id="catalog-result-count" style="font-size:13px;color:var(--sds-text-tertiary);">' + tables.length + ' tables</span>';
+    html += Components.button(Icons.render('download', 14) + ' Export', 'secondary', 'sm');
+    html += '</div>';
+
+    // Data table
+    html += '<table class="data-table" id="catalog-table">';
+    html += '<thead><tr>';
+    html += '<th>Table</th>';
+    html += '<th>Classification</th>';
+    html += '<th>Coverage</th>';
+    html += '<th>Sensitivity</th>';
+    html += '<th>Owner</th>';
+    html += '<th>Last Scanned</th>';
+    html += '<th style="text-align:right;">Rows</th>';
+    html += '</tr></thead>';
+    html += '<tbody id="catalog-table-body">';
+    for (var ti = 0; ti < tables.length; ti++) {
+      html += catalogTableRow(tables[ti]);
+    }
+    html += '</tbody></table>';
 
     // Pagination
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;font-size:13px;color:var(--sds-text-secondary,#54514D);">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;font-size:13px;color:var(--sds-text-secondary);">';
     html += '<span>Showing 1-' + tables.length + ' of ' + tables.length + '</span>';
-    html += '<div style="display:flex;gap:4px;">';
-    html += '<button class="btn btn-sm" style="background:var(--sds-interactive-primary,#013D5B);color:white;min-width:32px;">1</button>';
     html += '</div>';
-    html += '</div>';
+
+    html += '</div>'; // close main content flex child
+    html += '</div>'; // close flex layout wrapper
 
     var content = document.getElementById('content');
     content.innerHTML = html;
 
-    // Delegated input handler for filter bar search
-    content.oninput = function(e) {
-      if (e.target.closest('.filter-bar input[type="text"]')) {
-        var query = e.target.value.toLowerCase();
-        var filtered = Data.tables.filter(function(t) {
-          return t.name.toLowerCase().indexOf(query) > -1;
-        });
-        var tableBody = content.querySelector('.data-table tbody');
-        if (tableBody) {
-          if (filtered.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--sds-text-tertiary);">No tables match your search</td></tr>';
-          } else {
-            tableBody.innerHTML = filtered.map(function(t) {
-              var row = '<tr data-navigate="#/catalog/' + t.id + '" role="link" tabindex="0">';
-              row += '<td>' + (t.schema || '--') + '</td>';
-              row += '<td><a data-navigate="#/catalog/' + t.id + '" style="font-weight:500;color:var(--sds-text-primary,#2C2924);cursor:pointer;">' + t.name + '</a></td>';
-              row += '<td><span style="font-size:13px;color:var(--sds-text-secondary,#54514D);">' + (t.connectionName || '--') + '</span></td>';
-              row += '<td style="text-align:right;">' + (t.columns || '--') + '</td>';
-              var clsPct = t.classifiedPct || 0;
-              var color;
-              if (clsPct === 100) color = 'var(--sds-status-success-strong)';
-              else if (clsPct > 0) color = 'var(--sds-status-warning-strong)';
-              else color = 'var(--sds-text-disabled)';
-              var barHtml = '<div style="display:flex;align-items:center;gap:8px;">';
-              barHtml += '<div style="width:40px;height:4px;border-radius:2px;background:var(--sds-bg-subtle);">';
-              barHtml += '<div style="width:' + clsPct + '%;height:100%;border-radius:2px;background:' + color + ';"></div>';
-              barHtml += '</div>';
-              barHtml += '<span style="font-size:12px;color:var(--sds-text-secondary,#54514D);">' + clsPct + '%</span>';
-              barHtml += '</div>';
-              row += '<td>' + barHtml + '</td>';
-              row += '<td>' + Components.sensitivityTag(t.sensitivity) + '</td>';
-              var tagsHtml = '--';
-              if (t.tags && t.tags.length > 0) {
-                tagsHtml = '';
-                for (var i = 0; i < t.tags.length; i++) {
-                  tagsHtml += categoryTag(t.tags[i]) + ' ';
-                }
-              }
-              row += '<td>' + tagsHtml + '</td>';
-              row += '<td><span style="font-size:13px;color:var(--sds-text-tertiary,#7A756B);">' + Data.timeAgo(t.lastScanned) + '</span></td>';
-              row += '</tr>';
-              return row;
-            }).join('');
-          }
+    // Wire up tree panel
+    wireTreePanel();
+
+    // Wire up live filtering
+    function applyFilters() {
+      var query = (document.getElementById('catalog-search') || {}).value || '';
+      var conn = (document.getElementById('catalog-filter-connection') || {}).value || '';
+      var sens = (document.getElementById('catalog-filter-sensitivity') || {}).value || '';
+      var stat = (document.getElementById('catalog-filter-status') || {}).value || '';
+      var filtered = filterCatalogTables(query, conn, sens, stat);
+      var tbody = document.getElementById('catalog-table-body');
+      var countEl = document.getElementById('catalog-result-count');
+      if (tbody) {
+        if (filtered.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--sds-text-tertiary);">No tables match your filters</td></tr>';
+        } else {
+          tbody.innerHTML = filtered.map(catalogTableRow).join('');
         }
       }
-    };
+      if (countEl) {
+        countEl.textContent = filtered.length + ' table' + (filtered.length !== 1 ? 's' : '');
+      }
+    }
+
+    // Search input
+    var searchEl = document.getElementById('catalog-search');
+    if (searchEl) searchEl.addEventListener('input', applyFilters);
+    // Filter dropdowns
+    var filterIds = ['catalog-filter-connection', 'catalog-filter-sensitivity', 'catalog-filter-status'];
+    for (var fi = 0; fi < filterIds.length; fi++) {
+      var filterEl = document.getElementById(filterIds[fi]);
+      if (filterEl) filterEl.addEventListener('change', applyFilters);
+    }
   }
 
   // ---- 10. Table Detail (/catalog/:id) ----
@@ -1088,55 +1367,99 @@
     }
 
     var classifications = Data.getClassificationsForTable(params.id);
-    var activeTab = State.get('tableDetailTab') || 'classifications';
+    var activeTab = State.get('tableDetailTab') || 'overview';
 
     var html = '';
+
+    // Breadcrumb
     html += Components.breadcrumb([
       { label: 'Data Catalog', href: '#/catalog' },
       { label: table.schema + '.' + table.name }
     ]);
 
-    // Tags
-    var tagsHtml = '';
+    // Header with table name, connection breadcrumb, badges, sensitivity
+    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">';
+    html += '<div>';
+    html += '<h1 style="font-size:24px;font-weight:700;font-family:\'SF Mono\',Menlo,monospace;color:var(--sds-text-primary);margin-bottom:6px;">' + table.schema + '.' + table.name + '</h1>';
+    html += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sds-text-secondary);margin-bottom:10px;">';
+    html += '<span>' + table.connectionName + '</span>';
+    html += '<span style="color:var(--sds-text-disabled);">/</span>';
+    html += '<span>' + table.schema + '</span>';
+    html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
     if (table.tags) {
       for (var tg = 0; tg < table.tags.length; tg++) {
-        tagsHtml += categoryTag(table.tags[tg]) + ' ';
+        html += categoryTag(table.tags[tg]);
       }
     }
-    tagsHtml += Components.sensitivityTag(table.sensitivity);
-
-    html += Components.pageHeader(
-      '<span style="font-family:monospace;">' + table.schema + '.' + table.name + '</span>',
-      table.connectionName + ' &mdash; ' + table.columns + ' columns &mdash; ' + Data.formatNumber(table.rowCount) + ' rows'
-    );
-    html += '<div style="margin:-12px 0 20px 0;">' + tagsHtml + '</div>';
-
+    html += Components.sensitivityTag(table.sensitivity);
+    html += '</div>';
+    html += '</div>';
     // Action buttons
-    html += '<div style="display:flex;gap:12px;margin-bottom:24px;">';
+    html += '<div style="display:flex;gap:8px;">';
     if (table.sensitivity === 'critical' || table.sensitivity === 'high') {
-      html += Components.button('Remediate', 'primary', 'md');
+      html += Components.button('Remediate', 'primary', 'sm');
     }
-    html += Components.button('Re-scan Table', 'secondary', 'md');
-    html += Components.button('Review in Queue', 'secondary', 'md', 'data-navigate="#/review"');
+    html += Components.button('Re-scan', 'secondary', 'sm');
+    html += Components.button('Review', 'secondary', 'sm', 'data-navigate="#/review"');
+    html += '</div>';
     html += '</div>';
 
-    // Tabs
+    // Summary cards row — 6 metric cards
+    html += '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:24px;">';
+    // Columns
+    html += '<div class="sds-card"><div style="padding:14px 16px;">';
+    html += '<div style="font-size:12px;font-weight:500;color:var(--sds-text-tertiary);margin-bottom:4px;">Columns</div>';
+    html += '<div style="font-size:20px;font-weight:700;color:var(--sds-text-primary);font-variant-numeric:tabular-nums;">' + table.columns + '</div>';
+    html += '</div></div>';
+    // Classified %
+    html += '<div class="sds-card"><div style="padding:14px 16px;">';
+    html += '<div style="font-size:12px;font-weight:500;color:var(--sds-text-tertiary);margin-bottom:4px;">Classified</div>';
+    html += '<div style="font-size:20px;font-weight:700;color:var(--sds-text-primary);font-variant-numeric:tabular-nums;">' + table.classifiedPct + '%</div>';
+    html += '</div></div>';
+    // Rows
+    html += '<div class="sds-card"><div style="padding:14px 16px;">';
+    html += '<div style="font-size:12px;font-weight:500;color:var(--sds-text-tertiary);margin-bottom:4px;">Rows</div>';
+    html += '<div style="font-size:20px;font-weight:700;color:var(--sds-text-primary);font-variant-numeric:tabular-nums;">' + Data.formatNumber(table.rowCount) + '</div>';
+    html += '</div></div>';
+    // Sensitivity
+    html += '<div class="sds-card"><div style="padding:14px 16px;">';
+    html += '<div style="font-size:12px;font-weight:500;color:var(--sds-text-tertiary);margin-bottom:4px;">Sensitivity</div>';
+    html += '<div style="margin-top:4px;">' + Components.sensitivityTag(table.sensitivity) + '</div>';
+    html += '</div></div>';
+    // Owner
+    html += '<div class="sds-card"><div style="padding:14px 16px;">';
+    html += '<div style="font-size:12px;font-weight:500;color:var(--sds-text-tertiary);margin-bottom:4px;">Owner</div>';
+    html += '<div style="font-size:14px;font-weight:600;color:var(--sds-text-primary);">' + (table.owner || '--') + '</div>';
+    html += '</div></div>';
+    // Last scanned
+    html += '<div class="sds-card"><div style="padding:14px 16px;">';
+    html += '<div style="font-size:12px;font-weight:500;color:var(--sds-text-tertiary);margin-bottom:4px;">Last Scanned</div>';
+    html += '<div style="font-size:14px;font-weight:600;color:var(--sds-text-primary);">' + Data.timeAgo(table.lastScanned) + '</div>';
+    html += '</div></div>';
+    html += '</div>';
+
+    // Tabs — flush, no gap
     html += Components.tabs([
-      { id: 'classifications', label: 'Classifications', badge: classifications.length },
-      { id: 'access', label: 'Access' },
+      { id: 'overview', label: 'Overview' },
+      { id: 'columns', label: 'Columns', badge: table.columns },
       { id: 'lineage', label: 'Lineage' },
-      { id: 'history', label: 'History' }
+      { id: 'access', label: 'Access' },
+      { id: 'activity', label: 'Activity' }
     ], activeTab);
 
-    html += '<div style="margin-top:24px;" id="table-detail-tab-content">';
+    // Tab content — directly below tabs, no extra margin
+    html += '<div id="table-detail-tab-content" style="padding-top:20px;">';
 
-    if (activeTab === 'classifications') {
+    if (activeTab === 'overview') {
+      html += renderOverviewTab(table, classifications);
+    } else if (activeTab === 'columns') {
       html += renderClassificationsTab(table, classifications);
-    } else if (activeTab === 'access') {
-      html += renderAccessTab(table);
     } else if (activeTab === 'lineage') {
       html += renderLineageTab(table);
-    } else if (activeTab === 'history') {
+    } else if (activeTab === 'access') {
+      html += renderAccessTab(table);
+    } else if (activeTab === 'activity') {
       html += renderHistoryTab(table, classifications);
     }
 
@@ -1145,17 +1468,107 @@
     var content = document.getElementById('content');
     content.innerHTML = html;
 
-    // Delegated click handler for table detail actions
-    content.onclick = function(e) {
+    // Delegated click handler for tabs
+    content.addEventListener('click', function(e) {
       var tab = e.target.closest('.sds-tab');
       if (tab) {
         var tabId = tab.getAttribute('data-tab');
         State.set('tableDetailTab', tabId);
         renderTableDetail(params);
       }
-    };
+    });
   }
 
+  // ---- Overview Tab ----
+  function renderOverviewTab(table, classifications) {
+    var html = '';
+
+    // Classification summary
+    var approved = 0, pending = 0, rejected = 0;
+    for (var ci = 0; ci < classifications.length; ci++) {
+      if (classifications[ci].status === 'approved') approved++;
+      else if (classifications[ci].status === 'pending') pending++;
+      else if (classifications[ci].status === 'rejected') rejected++;
+    }
+
+    html += '<div class="grid-2" style="gap:20px;margin-bottom:24px;">';
+
+    // Classification breakdown card
+    html += Components.card({
+      title: 'Classification Summary',
+      body: (function() {
+        var b = '';
+        b += '<div style="display:flex;gap:24px;margin-bottom:16px;">';
+        b += '<div><div style="font-size:24px;font-weight:700;color:var(--sds-status-success-text);">' + approved + '</div><div style="font-size:12px;color:var(--sds-text-tertiary);">Approved</div></div>';
+        b += '<div><div style="font-size:24px;font-weight:700;color:var(--sds-status-warning-text);">' + pending + '</div><div style="font-size:12px;color:var(--sds-text-tertiary);">Pending</div></div>';
+        b += '<div><div style="font-size:24px;font-weight:700;color:var(--sds-status-error-text);">' + rejected + '</div><div style="font-size:12px;color:var(--sds-text-tertiary);">Rejected</div></div>';
+        b += '<div><div style="font-size:24px;font-weight:700;color:var(--sds-text-tertiary);">' + (table.columns - classifications.length) + '</div><div style="font-size:12px;color:var(--sds-text-tertiary);">Not Classified</div></div>';
+        b += '</div>';
+        b += '<div style="margin-bottom:8px;font-size:13px;font-weight:500;color:var(--sds-text-secondary);">Coverage</div>';
+        b += Components.progressBar(table.classifiedPct, table.classifiedPct === 100 ? 'success' : table.classifiedPct >= 70 ? null : 'warning');
+        b += '<div style="font-size:12px;color:var(--sds-text-tertiary);margin-top:4px;">' + table.classifiedColumns + ' of ' + table.columns + ' columns classified (' + table.classifiedPct + '%)</div>';
+        return b;
+      })(),
+      bordered: true
+    });
+
+    // Sensitive data categories card
+    html += Components.card({
+      title: 'Data Categories',
+      body: (function() {
+        var b = '';
+        if (!table.tags || table.tags.length === 0) {
+          b += '<div style="color:var(--sds-text-tertiary);font-size:14px;">No sensitive categories detected</div>';
+        } else {
+          var catDescriptions = {
+            'PII': 'Personally Identifiable Information',
+            'PCI': 'Payment Card Industry Data',
+            'PHI': 'Protected Health Information',
+            'CCPA': 'California Consumer Privacy Act'
+          };
+          for (var ct = 0; ct < table.tags.length; ct++) {
+            b += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;' + (ct > 0 ? 'border-top:1px solid var(--sds-border-subtle);' : '') + '">';
+            b += categoryTag(table.tags[ct]);
+            b += '<span style="font-size:13px;color:var(--sds-text-secondary);">' + (catDescriptions[table.tags[ct]] || table.tags[ct]) + '</span>';
+            b += '</div>';
+          }
+        }
+        return b;
+      })(),
+      bordered: true
+    });
+
+    html += '</div>';
+
+    // Top classified columns preview
+    if (classifications.length > 0) {
+      var previewCls = classifications.slice(0, 5);
+      html += Components.card({
+        title: 'Top Classified Columns',
+        actions: '<a data-tab="columns" class="sds-tab" role="tab" style="border:none;font-size:13px;color:var(--sds-text-link);cursor:pointer;padding:0;">View all columns</a>',
+        body: (function() {
+          var b = '<table class="data-table"><thead><tr><th>Column</th><th>Classification</th><th>Category</th><th>Confidence</th><th>Status</th></tr></thead><tbody>';
+          for (var pc = 0; pc < previewCls.length; pc++) {
+            var cls = previewCls[pc];
+            b += '<tr>';
+            b += '<td><code style="font-size:13px;font-weight:500;">' + cls.columnName + '</code></td>';
+            b += '<td style="font-size:13px;">' + cls.suggestedType + '</td>';
+            b += '<td>' + categoryTag(cls.category) + '</td>';
+            b += '<td>' + confidenceBar(cls.confidence) + '</td>';
+            b += '<td>' + classificationStatusTag(cls.status) + '</td>';
+            b += '</tr>';
+          }
+          b += '</tbody></table>';
+          return b;
+        })(),
+        bordered: true
+      });
+    }
+
+    return html;
+  }
+
+  // ---- Columns Tab (classifications) ----
   function renderClassificationsTab(table, classifications) {
     var html = '';
 
@@ -1197,19 +1610,19 @@
 
       html += '<tr>';
       html += '<td><code style="font-size:13px;font-weight:500;">' + col.name + '</code></td>';
-      html += '<td><span style="font-size:13px;font-family:monospace;color:var(--sds-text-tertiary,#7A756B);">' + col.dataType + '</span></td>';
+      html += '<td><span style="font-size:13px;font-family:\'SF Mono\',Menlo,monospace;color:var(--sds-text-tertiary);">' + col.dataType + '</span></td>';
 
       if (cls) {
         html += '<td>' + categoryTag(cls.category) + ' <span style="font-size:12px;">' + cls.suggestedType + '</span></td>';
         html += '<td>' + confidenceBar(cls.confidence) + '</td>';
         html += '<td>' + classificationStatusTag(cls.status);
         if (cls.status === 'pending') {
-          html += ' <a data-navigate="#/review" style="font-size:12px;color:var(--sds-text-link,#013D5B);cursor:pointer;">Review</a>';
+          html += ' <a data-navigate="#/review" style="font-size:12px;color:var(--sds-text-link);cursor:pointer;">Review</a>';
         }
         html += '</td>';
-        html += '<td style="font-size:13px;color:var(--sds-text-secondary,#54514D);">' + (cls.reviewer || 'Auto') + '</td>';
+        html += '<td style="font-size:13px;color:var(--sds-text-secondary);">' + (cls.reviewer || 'Auto') + '</td>';
       } else {
-        html += '<td style="color:var(--sds-text-tertiary,#7A756B);">--</td>';
+        html += '<td style="color:var(--sds-text-tertiary);">--</td>';
         html += '<td>--</td>';
         html += '<td>' + Components.tag('Not Sensitive', 'neutral') + '</td>';
         html += '<td>--</td>';
@@ -1221,6 +1634,7 @@
     return html;
   }
 
+  // ---- Access Tab ----
   function renderAccessTab(table) {
     var users = [
       { name: 'Jordan Chen', role: 'Data Engineer', access: 'Read/Write', grantedAt: '2023-06-15T09:00:00Z' },
@@ -1229,7 +1643,13 @@
       { name: 'Analytics Team', role: 'Group', access: 'Masked Read', grantedAt: '2023-09-15T09:00:00Z' }
     ];
 
-    return Components.dataTable({
+    var html = '';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<div style="font-size:14px;color:var(--sds-text-secondary);">' + users.length + ' users and groups have access</div>';
+    html += Components.button('Request Access', 'secondary', 'sm');
+    html += '</div>';
+
+    html += Components.dataTable({
       columns: [
         { key: 'name', label: 'User / Group', render: function(val) { return '<span style="font-weight:500;">' + val + '</span>'; }},
         { key: 'role', label: 'Role' },
@@ -1241,44 +1661,264 @@
       ],
       rows: users
     });
-  }
 
-  function renderLineageTab(table) {
-    var html = '';
-    html += '<div style="padding:40px;text-align:center;">';
-    html += '<div style="display:flex;align-items:center;justify-content:center;gap:32px;margin-bottom:24px;">';
-
-    // Simple lineage diagram
-    var upstream = ['raw_data.' + table.name, 'staging.' + table.name + '_staging'];
-    var downstream = ['analytics.' + table.name + '_agg', 'reports.' + table.name + '_summary'];
-
-    html += '<div style="text-align:right;">';
-    html += '<div style="font-size:12px;font-weight:600;color:var(--sds-text-secondary,#54514D);margin-bottom:8px;">UPSTREAM</div>';
-    for (var u = 0; u < upstream.length; u++) {
-      html += '<div style="padding:8px 16px;background:var(--sds-bg-subtle,#F4F1EB);border-radius:6px;margin-bottom:4px;font-size:13px;font-family:monospace;">' + upstream[u] + '</div>';
-    }
-    html += '</div>';
-
-    html += '<div style="font-size:24px;color:var(--sds-text-tertiary,#7A756B);">&rarr;</div>';
-
-    html += '<div style="padding:12px 20px;background:var(--sds-interactive-primary,#013D5B);color:white;border-radius:8px;font-size:14px;font-weight:500;font-family:monospace;">';
-    html += table.schema + '.' + table.name;
-    html += '</div>';
-
-    html += '<div style="font-size:24px;color:var(--sds-text-tertiary,#7A756B);">&rarr;</div>';
-
-    html += '<div style="text-align:left;">';
-    html += '<div style="font-size:12px;font-weight:600;color:var(--sds-text-secondary,#54514D);margin-bottom:8px;">DOWNSTREAM</div>';
-    for (var d = 0; d < downstream.length; d++) {
-      html += '<div style="padding:8px 16px;background:var(--sds-bg-subtle,#F4F1EB);border-radius:6px;margin-bottom:4px;font-size:13px;font-family:monospace;">' + downstream[d] + '</div>';
-    }
-    html += '</div>';
-
-    html += '</div>';
-    html += '</div>';
     return html;
   }
 
+  // ---- Lineage Tab (Interactive SVG) ----
+  function renderLineageTab(table) {
+    // Build lineage data using real Data.tables references where possible
+    var allTables = Data.tables;
+    var currentConn = Data.getConnection(table.connectionId);
+
+    // Find related tables for upstream/downstream (from same or different connections)
+    var upstreamNodes = [];
+    var downstreamNodes = [];
+
+    // Synthetic upstream: raw/staging versions
+    var upstreamDefs = [
+      { name: 'raw_' + table.name, schema: 'raw_data', connName: table.connectionName, connId: table.connectionId, tags: [], columns: ['*'] },
+      { name: table.name + '_staging', schema: 'staging', connName: table.connectionName, connId: table.connectionId, tags: table.tags || [], columns: [] }
+    ];
+    // Try to find a real table from a different connection as a third upstream
+    for (var ui = 0; ui < allTables.length; ui++) {
+      if (allTables[ui].id !== table.id && allTables[ui].connectionId !== table.connectionId && upstreamNodes.length < 1) {
+        upstreamDefs.push({
+          id: allTables[ui].id,
+          name: allTables[ui].name,
+          schema: allTables[ui].schema,
+          connName: allTables[ui].connectionName,
+          connId: allTables[ui].connectionId,
+          tags: allTables[ui].tags || [],
+          columns: []
+        });
+        break;
+      }
+    }
+    upstreamNodes = upstreamDefs;
+
+    // Synthetic downstream: agg/report/summary
+    var downstreamDefs = [
+      { name: table.name + '_agg', schema: 'analytics', connName: table.connectionName, connId: table.connectionId, tags: [], columns: [] },
+      { name: table.name + '_report', schema: 'reports', connName: 'Redshift DWH', connId: 'conn-7', tags: [], columns: [] }
+    ];
+    // Find a real downstream table
+    for (var di = 0; di < allTables.length; di++) {
+      if (allTables[di].id !== table.id && allTables[di].connectionId === table.connectionId && allTables[di].id !== table.id && downstreamDefs.length < 3) {
+        var alreadyUsed = false;
+        for (var chk = 0; chk < upstreamDefs.length; chk++) {
+          if (upstreamDefs[chk].id === allTables[di].id) { alreadyUsed = true; break; }
+        }
+        if (!alreadyUsed) {
+          downstreamDefs.push({
+            id: allTables[di].id,
+            name: allTables[di].name,
+            schema: allTables[di].schema,
+            connName: allTables[di].connectionName,
+            connId: allTables[di].connectionId,
+            tags: allTables[di].tags || [],
+            columns: []
+          });
+          break;
+        }
+      }
+    }
+    downstreamNodes = downstreamDefs;
+
+    // Column-level lineage data (synthetic but realistic)
+    var classificationCols = Data.getClassificationsForTable(table.id);
+    var columnFlows = [];
+    var sensitiveColNames = [];
+    for (var cfi = 0; cfi < classificationCols.length && cfi < 3; cfi++) {
+      sensitiveColNames.push(classificationCols[cfi].columnName);
+      columnFlows.push({
+        colName: classificationCols[cfi].columnName,
+        category: classificationCols[cfi].category,
+        upIdx: cfi % upstreamNodes.length,
+        downIdx: cfi % downstreamNodes.length
+      });
+    }
+
+    // SVG dimensions
+    var svgW = 1100, svgH = 520;
+    var nodeW = 220, nodeH = 80;
+    var centerX = svgW / 2, centerY = svgH / 2;
+    var leftX = 60, rightX = svgW - nodeW - 60;
+
+    // Compute node positions
+    var upPositions = [];
+    var upSpacing = Math.min(110, (svgH - 60) / upstreamNodes.length);
+    var upStartY = centerY - ((upstreamNodes.length - 1) * upSpacing) / 2 - nodeH / 2;
+    for (var up = 0; up < upstreamNodes.length; up++) {
+      upPositions.push({ x: leftX, y: upStartY + up * upSpacing });
+    }
+
+    var downPositions = [];
+    var downSpacing = Math.min(110, (svgH - 60) / downstreamNodes.length);
+    var downStartY = centerY - ((downstreamNodes.length - 1) * downSpacing) / 2 - nodeH / 2;
+    for (var dp = 0; dp < downstreamNodes.length; dp++) {
+      downPositions.push({ x: rightX, y: downStartY + dp * downSpacing });
+    }
+
+    var centerNodeX = centerX - nodeW / 2;
+    var centerNodeY = centerY - nodeH / 2;
+
+    var html = '';
+    html += '<div style="background:var(--sds-bg-surface);border:1px solid var(--sds-border-subtle);border-radius:8px;padding:16px;overflow-x:auto;">';
+
+    // Legend
+    html += '<div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;font-size:12px;color:var(--sds-text-tertiary);">';
+    html += '<span style="font-weight:600;color:var(--sds-text-secondary);">Lineage</span>';
+    html += '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--sds-interactive-primary);display:inline-block;"></span> Current table</span>';
+    html += '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--sds-bg-subtle);border:1px solid var(--sds-border-strong);display:inline-block;"></span> Related table</span>';
+    html += '<span style="display:inline-flex;align-items:center;gap:4px;"><svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--sds-status-error-strong)" stroke-width="1.5" stroke-dasharray="3,2"/><polygon points="14,1 20,4 14,7" fill="var(--sds-status-error-strong)"/></svg> Sensitive column flow</span>';
+    html += '</div>';
+
+    html += '<svg width="' + svgW + '" height="' + svgH + '" viewBox="0 0 ' + svgW + ' ' + svgH + '" xmlns="http://www.w3.org/2000/svg" style="display:block;min-width:' + svgW + 'px;">';
+
+    // Defs: arrowhead markers
+    html += '<defs>';
+    html += '<marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--sds-border-strong)"/></marker>';
+    html += '<marker id="arrow-sensitive" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--sds-status-error-strong)"/></marker>';
+    html += '</defs>';
+
+    // Draw connector lines from upstream to center
+    for (var li = 0; li < upPositions.length; li++) {
+      var fromX = upPositions[li].x + nodeW;
+      var fromY = upPositions[li].y + nodeH / 2;
+      var toX = centerNodeX;
+      var toY = centerNodeY + nodeH / 2;
+      var cpx1 = fromX + 60;
+      var cpx2 = toX - 60;
+      html += '<path d="M ' + fromX + ' ' + fromY + ' C ' + cpx1 + ' ' + fromY + ' ' + cpx2 + ' ' + toY + ' ' + toX + ' ' + toY + '" fill="none" stroke="var(--sds-border-strong)" stroke-width="1.5" marker-end="url(#arrow)"/>';
+    }
+
+    // Draw connector lines from center to downstream
+    for (var ri = 0; ri < downPositions.length; ri++) {
+      var dfromX = centerNodeX + nodeW;
+      var dfromY = centerNodeY + nodeH / 2;
+      var dtoX = downPositions[ri].x;
+      var dtoY = downPositions[ri].y + nodeH / 2;
+      var dcpx1 = dfromX + 60;
+      var dcpx2 = dtoX - 60;
+      html += '<path d="M ' + dfromX + ' ' + dfromY + ' C ' + dcpx1 + ' ' + dfromY + ' ' + dcpx2 + ' ' + dtoY + ' ' + dtoX + ' ' + dtoY + '" fill="none" stroke="var(--sds-border-strong)" stroke-width="1.5" marker-end="url(#arrow)"/>';
+    }
+
+    // Draw column-level lineage lines (dashed, colored)
+    for (var clf = 0; clf < columnFlows.length; clf++) {
+      var flow = columnFlows[clf];
+      var colOffset = (clf + 1) * 12;
+      // Upstream to center
+      var ufx = upPositions[flow.upIdx].x + nodeW;
+      var ufy = upPositions[flow.upIdx].y + nodeH / 2 + colOffset;
+      var ucx = centerNodeX;
+      var ucy = centerNodeY + nodeH / 2 + colOffset;
+      html += '<path d="M ' + ufx + ' ' + ufy + ' C ' + (ufx + 50) + ' ' + ufy + ' ' + (ucx - 50) + ' ' + ucy + ' ' + ucx + ' ' + ucy + '" fill="none" stroke="var(--sds-status-error-strong)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-sensitive)" opacity="0.7"/>';
+      // Label on the line
+      var labelX = (ufx + ucx) / 2;
+      var labelY = (ufy + ucy) / 2 - 6;
+      html += '<text x="' + labelX + '" y="' + labelY + '" font-size="10" fill="var(--sds-status-error-text)" text-anchor="middle" font-family="\'SF Mono\',Menlo,monospace">' + flow.colName + '</text>';
+
+      // Center to downstream
+      var dcfx = centerNodeX + nodeW;
+      var dcfy = centerNodeY + nodeH / 2 + colOffset;
+      var ddtx = downPositions[flow.downIdx].x;
+      var ddty = downPositions[flow.downIdx].y + nodeH / 2 + colOffset;
+      html += '<path d="M ' + dcfx + ' ' + dcfy + ' C ' + (dcfx + 50) + ' ' + dcfy + ' ' + (ddtx - 50) + ' ' + ddty + ' ' + ddtx + ' ' + ddty + '" fill="none" stroke="var(--sds-status-error-strong)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-sensitive)" opacity="0.7"/>';
+    }
+
+    // Draw upstream nodes
+    for (var un = 0; un < upstreamNodes.length; un++) {
+      var uNode = upstreamNodes[un];
+      var ux = upPositions[un].x, uy = upPositions[un].y;
+      var clickAttr = uNode.id ? ' data-navigate="#/catalog/' + uNode.id + '" style="cursor:pointer;"' : '';
+      html += '<g' + clickAttr + '>';
+      html += '<rect x="' + ux + '" y="' + uy + '" width="' + nodeW + '" height="' + nodeH + '" rx="6" fill="var(--sds-bg-card)" stroke="var(--sds-border-strong)" stroke-width="1"/>';
+      html += '<text x="' + (ux + 12) + '" y="' + (uy + 22) + '" font-size="12" font-weight="600" fill="var(--sds-text-primary)" font-family="\'SF Mono\',Menlo,monospace">' + uNode.name + '</text>';
+      html += '<text x="' + (ux + 12) + '" y="' + (uy + 38) + '" font-size="10" fill="var(--sds-text-tertiary)">' + uNode.schema + ' &middot; ' + uNode.connName + '</text>';
+      // Tags
+      var uTagX = ux + 12;
+      for (var utg = 0; utg < uNode.tags.length && utg < 3; utg++) {
+        var tagColor = uNode.tags[utg] === 'PII' ? 'var(--sds-status-error-bg)' : uNode.tags[utg] === 'PCI' ? 'var(--sds-status-warning-bg)' : 'var(--sds-status-info-bg)';
+        var tagText = uNode.tags[utg] === 'PII' ? 'var(--sds-status-error-text)' : uNode.tags[utg] === 'PCI' ? 'var(--sds-status-warning-text)' : 'var(--sds-status-info-text)';
+        html += '<rect x="' + uTagX + '" y="' + (uy + 50) + '" width="30" height="16" rx="3" fill="' + tagColor + '"/>';
+        html += '<text x="' + (uTagX + 15) + '" y="' + (uy + 62) + '" font-size="9" font-weight="600" fill="' + tagText + '" text-anchor="middle">' + uNode.tags[utg] + '</text>';
+        uTagX += 36;
+      }
+      html += '</g>';
+    }
+
+    // Draw center node (highlighted)
+    html += '<rect x="' + centerNodeX + '" y="' + centerNodeY + '" width="' + nodeW + '" height="' + nodeH + '" rx="6" fill="var(--sds-interactive-primary)" stroke="var(--sds-interactive-primary)" stroke-width="2"/>';
+    html += '<text x="' + (centerNodeX + nodeW / 2) + '" y="' + (centerNodeY + 24) + '" font-size="13" font-weight="700" fill="white" text-anchor="middle" font-family="\'SF Mono\',Menlo,monospace">' + table.name + '</text>';
+    html += '<text x="' + (centerNodeX + nodeW / 2) + '" y="' + (centerNodeY + 42) + '" font-size="10" fill="rgba(255,255,255,0.75)" text-anchor="middle">' + table.schema + ' &middot; ' + table.connectionName + '</text>';
+    // Tags on center node
+    var cTagX = centerNodeX + nodeW / 2 - ((table.tags ? table.tags.length : 0) * 18);
+    if (table.tags) {
+      for (var ctg = 0; ctg < table.tags.length; ctg++) {
+        html += '<rect x="' + cTagX + '" y="' + (centerNodeY + 52) + '" width="30" height="16" rx="3" fill="rgba(255,255,255,0.2)"/>';
+        html += '<text x="' + (cTagX + 15) + '" y="' + (centerNodeY + 64) + '" font-size="9" font-weight="600" fill="white" text-anchor="middle">' + table.tags[ctg] + '</text>';
+        cTagX += 36;
+      }
+    }
+
+    // Draw downstream nodes
+    for (var dn = 0; dn < downstreamNodes.length; dn++) {
+      var dNode = downstreamNodes[dn];
+      var dx = downPositions[dn].x, dy = downPositions[dn].y;
+      var dClickAttr = dNode.id ? ' data-navigate="#/catalog/' + dNode.id + '" style="cursor:pointer;"' : '';
+      html += '<g' + dClickAttr + '>';
+      html += '<rect x="' + dx + '" y="' + dy + '" width="' + nodeW + '" height="' + nodeH + '" rx="6" fill="var(--sds-bg-card)" stroke="var(--sds-border-strong)" stroke-width="1"/>';
+      html += '<text x="' + (dx + 12) + '" y="' + (dy + 22) + '" font-size="12" font-weight="600" fill="var(--sds-text-primary)" font-family="\'SF Mono\',Menlo,monospace">' + dNode.name + '</text>';
+      html += '<text x="' + (dx + 12) + '" y="' + (dy + 38) + '" font-size="10" fill="var(--sds-text-tertiary)">' + dNode.schema + ' &middot; ' + dNode.connName + '</text>';
+      // Tags
+      var dTagX = dx + 12;
+      for (var dtg = 0; dtg < dNode.tags.length && dtg < 3; dtg++) {
+        var dTagColor = dNode.tags[dtg] === 'PII' ? 'var(--sds-status-error-bg)' : dNode.tags[dtg] === 'PCI' ? 'var(--sds-status-warning-bg)' : 'var(--sds-status-info-bg)';
+        var dTagTextCol = dNode.tags[dtg] === 'PII' ? 'var(--sds-status-error-text)' : dNode.tags[dtg] === 'PCI' ? 'var(--sds-status-warning-text)' : 'var(--sds-status-info-text)';
+        html += '<rect x="' + dTagX + '" y="' + (dy + 50) + '" width="30" height="16" rx="3" fill="' + dTagColor + '"/>';
+        html += '<text x="' + (dTagX + 15) + '" y="' + (dy + 62) + '" font-size="9" font-weight="600" fill="' + dTagTextCol + '" text-anchor="middle">' + dNode.tags[dtg] + '</text>';
+        dTagX += 36;
+      }
+      html += '</g>';
+    }
+
+    // Column labels at upstream labels area
+    html += '<text x="' + (leftX + nodeW / 2) + '" y="20" font-size="11" font-weight="600" fill="var(--sds-text-tertiary)" text-anchor="middle" letter-spacing="0.5">UPSTREAM</text>';
+    html += '<text x="' + (centerX) + '" y="20" font-size="11" font-weight="600" fill="var(--sds-text-tertiary)" text-anchor="middle" letter-spacing="0.5">CURRENT</text>';
+    html += '<text x="' + (rightX + nodeW / 2) + '" y="20" font-size="11" font-weight="600" fill="var(--sds-text-tertiary)" text-anchor="middle" letter-spacing="0.5">DOWNSTREAM</text>';
+
+    html += '</svg>';
+    html += '</div>';
+
+    // Column-level lineage detail table
+    if (columnFlows.length > 0) {
+      html += '<div style="margin-top:20px;">';
+      html += Components.card({
+        title: 'Sensitive Column Lineage',
+        body: (function() {
+          var b = '<table class="data-table"><thead><tr><th>Column</th><th>Category</th><th>Upstream Source</th><th>Downstream Target</th></tr></thead><tbody>';
+          for (var cf = 0; cf < columnFlows.length; cf++) {
+            var fl = columnFlows[cf];
+            b += '<tr>';
+            b += '<td><code style="font-size:13px;font-weight:500;">' + fl.colName + '</code></td>';
+            b += '<td>' + categoryTag(fl.category) + '</td>';
+            b += '<td style="font-size:13px;font-family:\'SF Mono\',Menlo,monospace;color:var(--sds-text-secondary);">' + upstreamNodes[fl.upIdx].schema + '.' + upstreamNodes[fl.upIdx].name + '</td>';
+            b += '<td style="font-size:13px;font-family:\'SF Mono\',Menlo,monospace;color:var(--sds-text-secondary);">' + downstreamNodes[fl.downIdx].schema + '.' + downstreamNodes[fl.downIdx].name + '</td>';
+            b += '</tr>';
+          }
+          b += '</tbody></table>';
+          return b;
+        })(),
+        bordered: true
+      });
+      html += '</div>';
+    }
+
+    return html;
+  }
+
+  // ---- Activity Tab ----
   function renderHistoryTab(table, classifications) {
     var history = [
       { date: '2024-03-12T15:00:00Z', user: 'Jordan Chen', action: 'Approved', column: 'email', previous: 'Pending', newVal: 'Confirmed (PII)' },
@@ -1290,14 +1930,14 @@
 
     return Components.dataTable({
       columns: [
-        { key: 'date', label: 'Date', render: function(val) { return Data.formatDateTime(val); }},
-        { key: 'user', label: 'User' },
+        { key: 'date', label: 'Date', render: function(val) { return '<span style="white-space:nowrap;">' + Data.formatDateTime(val) + '</span>'; }},
+        { key: 'user', label: 'User', render: function(val) { return '<span style="font-weight:500;">' + val + '</span>'; }},
         { key: 'action', label: 'Action', render: function(val) {
           var variant = val === 'Approved' ? 'success' : val === 'Auto-classified' ? 'info' : 'neutral';
           return Components.tag(val, variant);
         }},
         { key: 'column', label: 'Column', render: function(val) {
-          if (val === '--') return '--';
+          if (val === '--') return '<span style="color:var(--sds-text-tertiary);">--</span>';
           return '<code style="font-size:13px;">' + val + '</code>';
         }},
         { key: 'previous', label: 'Previous' },
