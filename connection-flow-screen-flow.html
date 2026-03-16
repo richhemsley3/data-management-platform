@@ -1284,15 +1284,21 @@ function resolvePillCollisions() {
 }
 
 // Draw all action pills in a top-most layer (above screens)
+// Path labels use OUTLINED style (white bg, colored border, colored text)
+// to clearly distinguish from solid-fill in-screen buttons
 function drawPillsLayer() {
   resolvePillCollisions();
   const pg = container.append('g').attr('class','pill-labels');
   pendingPills.forEach(p => {
     const g = pg.append('g').attr('class','connector-group').datum({layer:p.layer});
     const ig = g.append('g').attr('transform',`translate(${p.x},${p.y})`);
-    const w = p.label.length*5+18;
-    roundRect(ig,-w/2,-10,w,20,10,p.color,'none');
-    txt(ig,0,4,p.label,9,'#FFF',500,'middle');
+    const w = p.label.length * 5.2 + 24;
+    // White background with colored border (clearly different from solid in-screen buttons)
+    roundRect(ig, -w/2, -11, w, 22, 11, '#FFFFFF', p.color, 1.5);
+    // Small colored accent dot on the left
+    ig.append('circle').attr('cx', -w/2 + 9).attr('cy', 0).attr('r', 3).attr('fill', p.color);
+    // Colored text
+    txt(ig, 3, 4, p.label, 8.5, p.color, 600, 'middle');
   });
 }
 
